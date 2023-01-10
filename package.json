@@ -1,0 +1,23 @@
+{
+  "name": "esoftplay-firestore",
+  "version": "0.0.1-a",
+  "description": "esoftplay function helper for firestore",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "esoftplay": "*"
+  },
+  "keywords": [
+    "esoftplay",
+    "firestore",
+    "mobile",
+    "development"
+  ],
+  "author": "kholil@fisip.net mukhlis@fisip.net",
+  "license": "ISC"
+}
