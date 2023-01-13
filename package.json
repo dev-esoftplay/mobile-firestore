@@ -1,8 +1,8 @@
 {
   "name": "esoftplay-firestore",
-  "version": "0.0.1-a",
+  "version": "0.0.1-b",
   "description": "esoftplay function helper for firestore",
-  "main": "index.js",
+  "main": "index.ts",
   "directories": {
     "test": "test"
   },
