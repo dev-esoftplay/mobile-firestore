@@ -1,6 +1,6 @@
 {
   "name": "esoftplay-firestore",
-  "version": "0.0.1-b",
+  "version": "0.0.1-c",
   "description": "esoftplay function helper for firestore",
   "main": "index.ts",
   "directories": {
@@ -8,9 +8,6 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "dependencies": {
-    "esoftplay": "*"
   },
   "keywords": [
     "esoftplay",
