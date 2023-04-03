@@ -2,12 +2,12 @@
 // noPage
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import esp from 'esoftplay/esp';
 import _global from 'esoftplay/_global';
+import esp from 'esoftplay/esp';
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, signInAnonymously } from 'firebase/auth';
 import { getReactNativePersistence } from 'firebase/auth/react-native';
-import { addDoc, collection, deleteDoc, doc, FieldPath, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, OrderByDirection, query, setDoc, startAfter, updateDoc, where, WhereFilterOp, writeBatch } from 'firebase/firestore';
+import { FieldPath, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from 'firebase/firestore';
 
 export interface DataId {
   id: string,
@@ -20,6 +20,10 @@ let lastVisible: any = null
 export interface updateValue {
   key: string,
   value: string
+}
+
+function conditionIsNotValid(where: any[]): boolean {
+  return where[2] == undefined || where[0] == undefined
 }
 
 const Firestore = {
@@ -82,6 +86,10 @@ const Firestore = {
   },
   get: {
     doc(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
+      if (conditionIsNotValid(condition)) {
+        console.warn("condition tidak boleh undefined", path)
+        return
+      }
       if (path.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
         return
@@ -105,8 +113,12 @@ const Firestore = {
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
+          if (conditionIsNotValid(c)) {
+            console.warn("condition tidak boleh undefined", path)
+          } else {
+            //@ts-ignore
+            conditionsArray.push(where(...c))
+          }
         })
       }
       let orderArray: any = []
@@ -140,8 +152,12 @@ const Firestore = {
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
+          if (conditionIsNotValid(c)) {
+            console.warn("condition tidak boleh undefined", path)
+          } else {
+            //@ts-ignore
+            conditionsArray.push(where(...c))
+          }
         })
       }
       //@ts-ignore
@@ -175,8 +191,12 @@ const Firestore = {
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
+          if (conditionIsNotValid(c)) {
+            console.warn("condition tidak boleh undefined", path)
+          } else {
+            //@ts-ignore
+            conditionsArray.push(where(...c))
+          }
         })
       }
       let orderArray: any = []
@@ -257,8 +277,12 @@ const Firestore = {
     let conditionsArray: any = []
     if (condition.length > 0) {
       condition.forEach((c) => {
-        //@ts-ignore
-        conditionsArray.push(where(...c))
+        if (conditionIsNotValid(c)) {
+          console.warn("condition tidak boleh undefined", path)
+        } else {
+          //@ts-ignore
+          conditionsArray.push(where(...c))
+        }
       })
     }
 
