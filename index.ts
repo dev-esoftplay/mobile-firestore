@@ -26,6 +26,11 @@ function conditionIsNotValid(where: any[]): boolean {
   return where[2] == undefined || where[0] == undefined
 }
 
+function castPathToString(path: any[]) {
+  const strings = path?.map?.(x => String(x)) || []
+  return strings
+}
+
 const Firestore = {
   init() {
     if (esp.config().hasOwnProperty('firebase')) {
@@ -51,22 +56,25 @@ const Firestore = {
   },
   add: {
     doc(path: string[], value: any, cb: () => void, err?: (error: any) => void) {
-      if (path.length % 2 > 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.add.doc]")
         return
       }
-      const colRef = doc(Firestore.db(), ...path)
+      const colRef = doc(Firestore.db(), ...fixedPath)
       setDoc(colRef, value).then((snap) => {
         cb()
       }).catch(err)
     },
     collection(path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) {
-      if (path.length % 2 == 0) {
+      const fixedPath = castPathToString(path)
+
+      if (fixedPath.length % 2 == 0) {
         console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
         return
       }
       //@ts-ignore
-      const colRef = collection(Firestore.db(), ...path)
+      const colRef = collection(Firestore.db(), ...fixedPath)
       addDoc(colRef, value).then((snap) => {
         cb({ id: snap?.id })
       }).catch(err)
@@ -74,11 +82,12 @@ const Firestore = {
   },
   delete: {
     doc(path: string[], cb: () => void, err?: (error: any) => void) {
-      if (path.length % 2 > 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.delete.doc]")
         return
       }
-      const colRef = doc(Firestore.db(), ...path)
+      const colRef = doc(Firestore.db(), ...fixedPath)
       deleteDoc(colRef).then((snap) => {
         cb()
       }).catch(err)
@@ -86,16 +95,17 @@ const Firestore = {
   },
   get: {
     doc(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
+      const fixedPath = castPathToString(path)
       if (conditionIsNotValid(condition)) {
-        console.warn("condition tidak boleh undefined", path)
+        console.warn("condition tidak boleh undefined", fixedPath)
         return
       }
-      if (path.length % 2 > 0) {
+      if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
         return
       }
       //@ts-ignore
-      const colRef = doc(Firestore.db(), ...path)
+      const colRef = doc(Firestore.db(), ...fixedPath)
       //@ts-ignore
       const fRef = (!condition || condition.length < 3) ? colRef : query(colRef, where(...condition))
       //@ts-ignore
@@ -104,17 +114,18 @@ const Firestore = {
       }).catch(err)
     },
     collectionWhereOrderBy(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-      if (path.length % 2 == 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 == 0) {
         console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
         return
       }
       //@ts-ignore
-      const colRef = collection(Firestore.db(), ...path)
+      const colRef = collection(Firestore.db(), ...fixedPath)
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
           if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", path)
+            console.warn("condition tidak boleh undefined", fixedPath)
           } else {
             //@ts-ignore
             conditionsArray.push(where(...c))
@@ -143,17 +154,18 @@ const Firestore = {
       }).catch(err)
     },
     collectionIds(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) {
-      if (path.length % 2 == 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 == 0) {
         console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collectionIds]")
         return
       }
       //@ts-ignore
-      const colRef = collection(Firestore.db(), ...path)
+      const colRef = collection(Firestore.db(), ...fixedPath)
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
           if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", path)
+            console.warn("condition tidak boleh undefined", fixedPath)
           } else {
             //@ts-ignore
             conditionsArray.push(where(...c))
@@ -182,17 +194,18 @@ const Firestore = {
   },
   listen: {
     collection(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-      if (path.length % 2 == 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 == 0) {
         console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
         return () => { }
       }
       //@ts-ignore
-      const colRef = collection(Firestore.db(), ...path)
+      const colRef = collection(Firestore.db(), ...fixedPath)
       let conditionsArray: any = []
       if (condition.length > 0) {
         condition.forEach((c) => {
           if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", path)
+            console.warn("condition tidak boleh undefined", fixedPath)
           } else {
             //@ts-ignore
             conditionsArray.push(where(...c))
@@ -222,12 +235,13 @@ const Firestore = {
       return () => unsub()
     },
     doc(path: string[], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-      if (path.length % 2 > 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
         return () => { }
       }
       // @ts-ignore
-      const colRef = doc(Firestore.db(), ...path)
+      const colRef = doc(Firestore.db(), ...fixedPath)
       const unsub = onSnapshot(colRef, (snap) => {
         cb(snap.data())
       }, err)
@@ -236,7 +250,8 @@ const Firestore = {
   },
   update: {
     doc(path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) {
-      if (path.length % 2 > 0) {
+      const fixedPath = castPathToString(path)
+      if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
         return
       }
@@ -244,18 +259,19 @@ const Firestore = {
         return { [x.key]: x.value }
       })
       const objVal = Object.assign({}, ...val)
-      const colRef = doc(Firestore.db(), ...path)
+      const colRef = doc(Firestore.db(), ...fixedPath)
       updateDoc(colRef, objVal).then((e) => {
         cb()
       }).catch(err)
     },
     batchDoc(path: string[], valueToUpdate: any[], cb: () => void, err?: (error: any) => void) {
+      const fixedPath = castPathToString(path)
       if (path.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
         return
       }
       const batch = writeBatch(Firestore?.db());
-      const sfRef = doc(Firestore?.db(), ...path);
+      const sfRef = doc(Firestore?.db(), ...fixedPath);
 
       valueToUpdate.forEach((e) => {
         batch.update(sfRef, e);
@@ -267,18 +283,19 @@ const Firestore = {
     }
   },
   paginate(isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void): void {
-    if (path.length % 2 == 0) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 == 0) {
       console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.paginate]")
       return
     }
     //@ts-ignore
-    const colRef = collection(Firestore.db(), ...path)
+    const colRef = collection(Firestore.db(), ...fixedPath)
 
     let conditionsArray: any = []
     if (condition.length > 0) {
       condition.forEach((c) => {
         if (conditionIsNotValid(c)) {
-          console.warn("condition tidak boleh undefined", path)
+          console.warn("condition tidak boleh undefined", fixedPath)
         } else {
           //@ts-ignore
           conditionsArray.push(where(...c))
