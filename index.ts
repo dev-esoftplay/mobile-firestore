@@ -96,10 +96,6 @@ const Firestore = {
   get: {
     doc(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
       const fixedPath = castPathToString(path)
-      if (conditionIsNotValid(condition)) {
-        console.warn("condition tidak boleh undefined", fixedPath)
-        return
-      }
       if (fixedPath.length % 2 > 0) {
         console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
         return
