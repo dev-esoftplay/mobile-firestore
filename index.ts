@@ -31,6 +31,10 @@ function castPathToString(path: any[]) {
   return strings
 }
 
+const firestoreSettings = {
+  useFetchStreams: false
+}
+
 const Firestore = {
   init() {
     if (esp.config().hasOwnProperty('firebase')) {
@@ -50,6 +54,7 @@ const Firestore = {
   db() {
     if (!_global.firebaseFirestore)
       _global.firebaseFirestore = initializeFirestore(_global.firebaseApp, {
+        ...firestoreSettings,
         experimentalForceLongPolling: true
       })
     return _global.firebaseFirestore
