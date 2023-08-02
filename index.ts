@@ -96,7 +96,24 @@ const Firestore = {
       deleteDoc(colRef).then((snap) => {
         cb()
       }).catch(err)
-    }
+    },
+    batchDoc(rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) {
+      const fixedPath = castPathToString(rootPath)
+      if (fixedPath.length % 2 == 0) {
+        console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
+        return
+      }
+      const batch = writeBatch(Firestore.db());
+      docIds.forEach((id) => {
+        const laRef = doc(Firestore.db(), ...fixedPath, id);
+        batch.delete(laRef);
+      })
+      batch.commit().then((result) => {
+        callback && callback(result)
+      }).catch((er) => {
+        error && error(er)
+      })
+    },
   },
   get: {
     doc(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
@@ -265,23 +282,27 @@ const Firestore = {
         cb()
       }).catch(err)
     },
-    batchDoc(path: string[], valueToUpdate: any[], cb: () => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (path.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
+    batchDoc(rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) {
+      const fixedPath = castPathToString(rootPath)
+      if (fixedPath.length % 2 == 0) {
+        console.warn("path untuk akses updateBatch cukup berhenti di Collection [Firestore.update.batchDoc]")
         return
       }
-      const batch = writeBatch(Firestore?.db());
-      const sfRef = doc(Firestore?.db(), ...fixedPath);
-
-      valueToUpdate.forEach((e) => {
-        batch.update(sfRef, e);
+      const batch = writeBatch(Firestore.db());
+      const value = values.map((x) => {
+        return { [x.key]: x.value }
       })
-
-      batch.commit().then((res) => {
-        cb()
-      }).catch(err)
-    }
+      const newValue = Object.assign({}, ...value)
+      docIds.forEach((id) => {
+        const laRef = doc(Firestore.db(), ...fixedPath, id);
+        batch.update(laRef, newValue);
+      })
+      batch.commit().then((result) => {
+        callback && callback(result)
+      }).catch((er) => {
+        error && error(er)
+      })
+    },
   },
   paginate(isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void): void {
     const fixedPath = castPathToString(path)
