@@ -2,10 +2,12 @@
 // noPage
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import _global from 'esoftplay/_global';
+import { useGlobalState } from 'esoftplay';
+import { LibUtils } from 'esoftplay/cache/lib/utils/import';
+import { UserClass } from 'esoftplay/cache/user/class/import';
 import esp from 'esoftplay/esp';
 import { initializeApp } from 'firebase/app';
-import { initializeAuth, signInAnonymously } from 'firebase/auth';
+import { createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getReactNativePersistence } from 'firebase/auth/react-native';
 import { FieldPath, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from 'firebase/firestore';
 
@@ -35,14 +37,75 @@ const firestoreSettings = {
   useFetchStreams: false
 }
 
+const firebaseApp = useGlobalState<any>(null)
+const firebaseAppAuth = useGlobalState<any>(null)
+const firebaseFirestore = useGlobalState<any>(null)
+const firebaseUser = useGlobalState<any>(null)
+
+function doRegisterFirebase(email: string, password: string) {
+  createUserWithEmailAndPassword(firebaseAppAuth.get(), email, password)
+    .then((userCredential) => {
+      firebaseUser.set(userCredential.user)
+    })
+    .catch((error) => {
+      if (error.code == "auth/email-already-in-use") {
+        doLoginFirebase(email, password)
+      } else {
+        throw "ERROR : " + error.code
+      }
+    });
+}
+
+function doLoginFirebase(email: string, password: string) {
+  signOut(firebaseAppAuth.get()).then(() => {
+    if (!firebaseUser.get()) {
+      signInWithEmailAndPassword(firebaseAppAuth.get(), email, password)
+        .then((userCredential) => {
+          firebaseUser.set(userCredential.user)
+        })
+        .catch((error) => {
+          if (error.code == "auth/user-not-found") {
+            doRegisterFirebase(email, password)
+          } else {
+            throw "ERROR : " + error.code
+          }
+        });
+    }
+  }).catch((error) => {
+    console.log("ERROR", error);
+  });
+}
+
 const Firestore = {
   init() {
+    const user = UserClass.state().get()
+    if (user) {
+      const email = user?.email
+      const password = LibUtils.shorten(user?.email + "-" + user?.id)
+      if (esp.config().hasOwnProperty('firebase')) {
+        if (esp.config('firebase').hasOwnProperty('projectId')) {
+          if (firebaseApp.get() == null) {
+            firebaseApp.set(initializeApp(esp.config("firebase"), "firestore-init-email"))
+            firebaseAppAuth.set(initializeAuth(firebaseApp.get(), { persistence: getReactNativePersistence(AsyncStorage) }))
+            doLoginFirebase(email, password)
+          } else {
+            doLoginFirebase(email, password)
+          }
+        } else {
+          throw "ERROR : firebase projectId not found in config.json"
+        }
+      } else {
+        throw "ERROR : firebase not found in config.json"
+      }
+    }
+  },
+  initAnonymously() {
     if (esp.config().hasOwnProperty('firebase')) {
       if (esp.config('firebase').hasOwnProperty('projectId')) {
-        if (!_global.firebaseApp) {
-          _global.firebaseApp = initializeApp(esp.config("firebase"), "firestore-init");
-          const appAuth = initializeAuth(_global.firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) })
-          signInAnonymously(appAuth);
+        if (firebaseApp.get() == null) {
+          firebaseApp.set(initializeApp(esp.config("firebase"), "firestore-init"))
+          firebaseAppAuth.set(initializeAuth(firebaseApp.get(), { persistence: getReactNativePersistence(AsyncStorage) }))
+          signInAnonymously(firebaseAppAuth.get())
         }
       } else {
         throw "ERROR : firebase projectId not found in config.json"
@@ -51,13 +114,25 @@ const Firestore = {
       throw "ERROR : firebase not found in config.json"
     }
   },
+  logout() {
+    if (firebaseUser.get()) {
+      signOut(firebaseAppAuth.get()).then(() => {
+        // console.log("LOGOUT_OK")
+        firebaseUser.reset()
+      }).catch((error) => {
+        console.log("ERROR", error);
+      });
+    } else {
+      console.log("NOT_LOGIN")
+    }
+  },
   db() {
-    if (!_global.firebaseFirestore)
-      _global.firebaseFirestore = initializeFirestore(_global.firebaseApp, {
+    if (firebaseFirestore.get() == null)
+      firebaseFirestore.set(initializeFirestore(firebaseApp.get(), {
         ...firestoreSettings,
         experimentalForceLongPolling: true
-      })
-    return _global.firebaseFirestore
+      }))
+    return firebaseFirestore.get()
   },
   add: {
     doc(path: string[], value: any, cb: () => void, err?: (error: any) => void) {
