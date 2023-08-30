@@ -81,7 +81,8 @@ const Firestore = {
     const user = UserClass.state().get()
     if (user) {
       const email = user?.email
-      const password = LibUtils.shorten(user?.email + "-" + user?.id)
+      const pass = LibUtils.shorten(user?.email + "" + user?.id)
+      const password = Firestore.generatePassword(pass, email)
       if (esp.config().hasOwnProperty('firebase')) {
         if (esp.config('firebase').hasOwnProperty('projectId')) {
           if (firebaseApp.get() == null) {
@@ -125,6 +126,25 @@ const Firestore = {
     } else {
       console.log("NOT_LOGIN")
     }
+  },
+  generatePassword(unique: string, email: string) {
+    let updatedEmail = '';
+    const atIndex = email?.indexOf?.('@');
+    const first = email?.substring?.(0, atIndex);
+    const last = email?.substring?.(atIndex + 1);
+    const minLength = Math.min(unique?.length || 0, first?.length || 0);
+
+    for (let i = 0; i < minLength; i++) {
+      updatedEmail += unique[i] + first[i];
+    }
+
+    if (unique.length > minLength) {
+      updatedEmail += unique.slice(minLength);
+    } else if (first.length > minLength) {
+      updatedEmail += first.slice(minLength);
+    }
+
+    return updatedEmail + "@" + last;
   },
   db() {
     if (firebaseFirestore.get() == null)
