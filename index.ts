@@ -1,15 +1,45 @@
 // useLibs
-// noPage
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useGlobalState } from 'esoftplay';
-import { LibUtils } from 'esoftplay/cache/lib/utils/import';
-import { UserClass } from 'esoftplay/cache/user/class/import';
-import esp from 'esoftplay/esp';
-import { initializeApp } from 'firebase/app';
-import { createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getReactNativePersistence } from 'firebase/auth/react-native';
-import { FieldPath, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from 'firebase/firestore';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LibUtils } from "esoftplay/cache/lib/utils/import";
+import { UserClass } from "esoftplay/cache/user/class/import";
+import esp from "esoftplay/esp";
+import { FirebaseApp, initializeApp } from "firebase/app";
+import { Auth, createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getReactNativePersistence } from "firebase/auth/react-native";
+import { FieldPath, Firestore, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from "firebase/firestore";
+
+
+export interface FirestoreInstance {
+  app: FirebaseApp;
+  auth: Auth;
+  db: Firestore;
+}
+
+export interface useFirestoreReturn {
+  init: (appName?: string, config?: any) => FirestoreInstance,
+  initAnonymously: (appName?: string, config?: any) => FirestoreInstance,
+  getDocument: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) => void,
+  getCollection: (database: any, path: string[], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void,
+  getCollectionIds: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) => void
+  getCollectionWhere: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
+  getCollectionOrderBy: (database: any, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
+  getCollectionWhereOrderBy: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
+  addDocument: (database: any, path: string[], value: any, cb: () => void, err?: (error: any) => void) => void
+  addCollection: (database: any, path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) => void
+  deleteDocument: (database: any, path: string[], cb: () => void, err?: (error: any) => void) => void
+  deleteBatchDocument: (database: any, rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) => void
+  listenCollection: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void) => () => void
+  listenDocument: (database: any, path: string[], cb: (dt: any) => void, err?: (error: any) => void) => () => void
+  updateDocument: (database: any, path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) => void
+  updateBatchDocument: (database: any, rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) => void
+  paginate: (database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
+  paginateOrderBy: (database: any, isStartPage: boolean, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
+  paginateWhere: (database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
+  paginateLimit: (database: any, isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void,
+  generatePassword: (uniquePassword: string, email: string) => string,
+  logout: (auth: any) => void
+}
 
 export interface DataId {
   id: string,
@@ -33,101 +63,135 @@ function castPathToString(path: any[]) {
   return strings
 }
 
+const initializedInstances: { [appName: string]: FirestoreInstance } = {};
+
 const firestoreSettings = {
   useFetchStreams: false
 }
 
-const firebaseApp = useGlobalState<any>(null)
-const firebaseAppAuth = useGlobalState<any>(null)
-const firebaseFirestore = useGlobalState<any>(null)
-const firebaseUser = useGlobalState<any>(null)
+export default function useFirestore(): useFirestoreReturn {
 
-function doRegisterFirebase(email: string, password: string) {
-  createUserWithEmailAndPassword(firebaseAppAuth.get(), email, password)
-    .then((userCredential) => {
-      firebaseUser.set(userCredential.user)
-    })
-    .catch((error) => {
-      if (error.code == "auth/email-already-in-use") {
-        doLoginFirebase(email, password)
-      } else {
-        throw "ERROR : " + error.code
-      }
-    });
-}
-
-function doLoginFirebase(email: string, password: string) {
-  signOut(firebaseAppAuth.get()).then(() => {
-    if (!firebaseUser.get()) {
-      signInWithEmailAndPassword(firebaseAppAuth.get(), email, password)
-        .then((userCredential) => {
-          firebaseUser.set(userCredential.user)
-        })
-        .catch((error) => {
-          if (error.code == "auth/user-not-found") {
-            doRegisterFirebase(email, password)
-          } else {
-            throw "ERROR : " + error.code
-          }
-        });
-    }
-  }).catch((error) => {
-    console.log("ERROR", error);
-  });
-}
-
-const Firestore = {
-  init() {
+  function init(appName?: string, config?: any): FirestoreInstance {
+    const defAppName = appName || "firestore-test";
+    const defConfig = config || esp.config("firebase");
     const user = UserClass.state().get()
-    if (user) {
-      const email = user?.email
-      const pass = LibUtils.shorten(user?.email + "" + user?.id)
-      const password = Firestore.generatePassword(pass, email)
-      if (esp.config().hasOwnProperty('firebase')) {
-        if (esp.config('firebase').hasOwnProperty('projectId')) {
-          if (firebaseApp.get() == null) {
-            firebaseApp.set(initializeApp(esp.config("firebase"), "firestore-init-email"))
-            firebaseAppAuth.set(initializeAuth(firebaseApp.get(), { persistence: getReactNativePersistence(AsyncStorage) }))
-            doLoginFirebase(email, password)
-          } else {
-            doLoginFirebase(email, password)
-          }
-        } else {
-          throw "ERROR : firebase projectId not found in config.json"
-        }
-      } else {
-        throw "ERROR : firebase not found in config.json"
-      }
-    }
-  },
-  initAnonymously() {
+
+    const email = user?.email
+    const pass = LibUtils.shorten(user?.email + "" + user?.id)
+    const password = generatePassword(pass, email)
+
     if (esp.config().hasOwnProperty('firebase')) {
-      if (esp.config('firebase').hasOwnProperty('projectId')) {
-        if (firebaseApp.get() == null) {
-          firebaseApp.set(initializeApp(esp.config("firebase"), "firestore-init"))
-          firebaseAppAuth.set(initializeAuth(firebaseApp.get(), { persistence: getReactNativePersistence(AsyncStorage) }))
-          signInAnonymously(firebaseAppAuth.get())
+      if (defConfig.hasOwnProperty('projectId') && defConfig.hasOwnProperty('apiKey')) {
+        if (user) {
+          if (initializedInstances[defAppName]) {
+            return initializedInstances[defAppName];
+          }
+
+          const firebaseApp = initializeApp(defConfig, defAppName);
+          const firebaseAppAuth = initializeAuth(firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) });
+
+          function doRegister(email: string, password: string) {
+            createUserWithEmailAndPassword(firebaseAppAuth, email, password)
+              .then((userCredential) => { })
+              .catch((error) => {
+                if (error.code == "auth/email-already-in-use") {
+                  doLogin(email, password)
+                } else {
+                  throw "ERROR : " + error.code
+                }
+              });
+          }
+          function doLogin(email: string, password: string) {
+            signOut(firebaseAppAuth).then(() => {
+              signInWithEmailAndPassword(firebaseAppAuth, email, password)
+                .then((userCredential) => { })
+                .catch((error) => {
+                  if (error.code == "auth/user-not-found") {
+                    doRegister(email, password)
+                  } else {
+                    throw "ERROR : " + error.code
+                  }
+                });
+            }).catch((error) => {
+              console.log("ERROR", error);
+            });
+          }
+
+          doLogin(email, password)
+
+          const firestoreDB = initializeFirestore(firebaseApp, {
+            ...firestoreSettings,
+            experimentalForceLongPolling: true,
+          });
+
+          const firestoreInstance: FirestoreInstance = {
+            app: firebaseApp,
+            auth: firebaseAppAuth,
+            db: firestoreDB,
+          };
+          initializedInstances[defAppName] = firestoreInstance;
+
+          return firestoreInstance;
+        } else {
+          return {
+            app: {},
+            auth: {},
+            db: {},
+          }
         }
       } else {
-        throw "ERROR : firebase projectId not found in config.json"
+        throw "ERROR : firebase projectId or apiKey not found in config.json"
       }
     } else {
       throw "ERROR : firebase not found in config.json"
     }
-  },
-  logout() {
-    if (firebaseUser.get()) {
-      signOut(firebaseAppAuth.get()).then(() => {
-        // console.log("LOGOUT_OK")
-        firebaseUser.reset()
-      }).catch((error) => {
-        console.log("ERROR", error);
-      });
+
+  }
+
+  function initAnonymously(appName?: string, config?: any): FirestoreInstance {
+    const defAppName = appName || "firestore-test";
+    const defConfig = config || esp.config("firebase");
+
+    if (esp.config().hasOwnProperty('firebase')) {
+      if (defConfig.hasOwnProperty('projectId') && defConfig.hasOwnProperty('apiKey')) {
+        if (initializedInstances[defAppName]) {
+          return initializedInstances[defAppName];
+        }
+
+        const firebaseApp = initializeApp(defConfig, defAppName);
+        const firebaseAppAuth = initializeAuth(firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) });
+
+        signInAnonymously(firebaseAppAuth)
+
+        const firestoreDB = initializeFirestore(firebaseApp, {
+          ...firestoreSettings,
+          experimentalForceLongPolling: true,
+        });
+
+        const firestoreInstance: FirestoreInstance = {
+          app: firebaseApp,
+          auth: firebaseAppAuth,
+          db: firestoreDB,
+        };
+        initializedInstances[defAppName] = firestoreInstance;
+
+        return firestoreInstance;
+      } else {
+        throw "ERROR : firebase projectId or apiKey not found in config.json"
+      }
     } else {
-      console.log("NOT_LOGIN")
+      throw "ERROR : firebase not found in config.json"
     }
-  },
-  generatePassword(unique: string, email: string) {
+  }
+
+  function logout(firebaseAppAuth: any) {
+    signOut(firebaseAppAuth).then(() => {
+    }).catch((error) => {
+      console.log("ERROR", error);
+    });
+  }
+
+  function generatePassword(unique: string, email: string): string {
     let updatedEmail = '';
     const atIndex = email?.indexOf?.('@');
     const first = email?.substring?.(0, atIndex);
@@ -145,268 +209,254 @@ const Firestore = {
     }
 
     return updatedEmail + "@" + last;
-  },
-  db() {
-    if (firebaseFirestore.get() == null)
-      firebaseFirestore.set(initializeFirestore(firebaseApp.get(), {
-        ...firestoreSettings,
-        experimentalForceLongPolling: true
-      }))
-    return firebaseFirestore.get()
-  },
-  add: {
-    doc(path: string[], value: any, cb: () => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.add.doc]")
-        return
-      }
-      const colRef = doc(Firestore.db(), ...fixedPath)
-      setDoc(colRef, value).then((snap) => {
-        cb()
-      }).catch(err)
-    },
-    collection(path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
+  }
 
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
-        return
-      }
-      //@ts-ignore
-      const colRef = collection(Firestore.db(), ...fixedPath)
-      addDoc(colRef, value).then((snap) => {
-        cb({ id: snap?.id })
-      }).catch(err)
+  function getDocument(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
+      return
     }
-  },
-  delete: {
-    doc(path: string[], cb: () => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.delete.doc]")
-        return
-      }
-      const colRef = doc(Firestore.db(), ...fixedPath)
-      deleteDoc(colRef).then((snap) => {
-        cb()
-      }).catch(err)
-    },
-    batchDoc(rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) {
-      const fixedPath = castPathToString(rootPath)
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
-        return
-      }
-      const batch = writeBatch(Firestore.db());
-      docIds.forEach((id) => {
-        const laRef = doc(Firestore.db(), ...fixedPath, id);
-        batch.delete(laRef);
-      })
-      batch.commit().then((result) => {
-        callback && callback(result)
-      }).catch((er) => {
-        error && error(er)
-      })
-    },
-  },
-  get: {
-    doc(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
-        return
-      }
-      //@ts-ignore
-      const colRef = doc(Firestore.db(), ...fixedPath)
-      //@ts-ignore
-      const fRef = (!condition || condition.length < 3) ? colRef : query(colRef, where(...condition))
-      //@ts-ignore
-      getDoc(fRef).then((snap) => {
-        cb({ data: snap.data(), id: snap.id })
-      }).catch(err)
-    },
-    collectionWhereOrderBy(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
-        return
-      }
-      //@ts-ignore
-      const colRef = collection(Firestore.db(), ...fixedPath)
-      let conditionsArray: any = []
-      if (condition.length > 0) {
-        condition.forEach((c) => {
-          if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", fixedPath)
-          } else {
-            //@ts-ignore
-            conditionsArray.push(where(...c))
-          }
-        })
-      }
-      let orderArray: any = []
-      if (order_by.length > 0) {
-        order_by.forEach((o) => {
-          //@ts-ignore
-          orderArray.push(orderBy(...o))
-        })
-      }
-      // @ts-ignore
-      // const fRef = (!condition || condition.length == 0) ? colRef : query(colRef, ...conditionsArray)
-      const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray)
-        : condition ? query(colRef, ...conditionsArray)
-          : order_by ? query(colRef, ...orderArray) : colRef
-
-      let datas: any[] = []
-      getDocs(fRef).then((snap) => {
-        snap.docs.forEach((doc) => {
-          datas.push({ data: doc.data(), id: doc.id })
-        })
-        cb(datas)
-      }).catch(err)
-    },
-    collectionIds(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collectionIds]")
-        return
-      }
-      //@ts-ignore
-      const colRef = collection(Firestore.db(), ...fixedPath)
-      let conditionsArray: any = []
-      if (condition.length > 0) {
-        condition.forEach((c) => {
-          if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", fixedPath)
-          } else {
-            //@ts-ignore
-            conditionsArray.push(where(...c))
-          }
-        })
-      }
-      //@ts-ignore
-      const fRef = conditionsArray.length > 0 ? query(colRef, ...conditionsArray) : colRef
-      let datas: any[] = []
-      getDocs(fRef).then((snap) => {
-        snap.docs.forEach((doc) => {
-          datas.push(doc.id)
-        })
-        cb(datas)
-      }).catch(err)
-    },
-    collection(path: string[], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-      Firestore.get.collectionWhereOrderBy(path, [], [], cb, err)
-    },
-    collectionWhere(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-      Firestore.get.collectionWhereOrderBy(path, condition, [], cb, err)
-    },
-    collectionOrderBy(path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-      Firestore.get.collectionWhereOrderBy(path, [], order_by, cb, err)
-    },
-  },
-  listen: {
-    collection(path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
-        return () => { }
-      }
-      //@ts-ignore
-      const colRef = collection(Firestore.db(), ...fixedPath)
-      let conditionsArray: any = []
-      if (condition.length > 0) {
-        condition.forEach((c) => {
-          if (conditionIsNotValid(c)) {
-            console.warn("condition tidak boleh undefined", fixedPath)
-          } else {
-            //@ts-ignore
-            conditionsArray.push(where(...c))
-          }
-        })
-      }
-      let orderArray: any = []
-      if (order_by.length > 0) {
-        order_by.forEach((o) => {
-          //@ts-ignore
-          orderArray.push(orderBy(...o))
-        })
-      }
-      let datas: any[] = []
-
-      const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray)
-        : condition ? query(colRef, ...conditionsArray)
-          : order_by ? query(colRef, ...orderArray) : colRef
-
-      const unsub = onSnapshot(fRef, (snap) => {
-        datas = []
-        snap.docs.forEach((doc) => {
-          datas.push({ data: doc.data(), id: doc.id })
-        })
-        cb(datas)
-      }, err)
-      return () => unsub()
-    },
-    doc(path: string[], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
-        return () => { }
-      }
-      // @ts-ignore
-      const colRef = doc(Firestore.db(), ...fixedPath)
-      const unsub = onSnapshot(colRef, (snap) => {
-        cb(snap.data())
-      }, err)
-      return () => unsub()
+    const colRef = doc(database, ...fixedPath)
+    //@ts-ignore
+    const fRef = (!condition || condition.length < 3) ? colRef : query(colRef, where(...condition))
+    //@ts-ignore
+    getDoc(fRef).then((snap) => {
+      cb({ data: snap.data(), id: snap.id })
+    }).catch(err)
+  }
+  function getCollection(database: any, path: string[], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
+    getCollectionWhereOrderBy(database, path, [], [], cb, err)
+  }
+  function getCollectionIds(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collectionIds]")
+      return
     }
-  },
-  update: {
-    doc(path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) {
-      const fixedPath = castPathToString(path)
-      if (fixedPath.length % 2 > 0) {
-        console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
-        return
-      }
-      const val = value.map((x) => {
-        return { [x.key]: x.value }
+    //@ts-ignore
+    const colRef = collection(database, ...fixedPath)
+    let conditionsArray: any = []
+    if (condition.length > 0) {
+      condition.forEach((c) => {
+        if (conditionIsNotValid(c)) {
+          console.warn("condition tidak boleh undefined", fixedPath)
+        } else {
+          //@ts-ignore
+          conditionsArray.push(where(...c))
+        }
       })
-      const objVal = Object.assign({}, ...val)
-      const colRef = doc(Firestore.db(), ...fixedPath)
-      updateDoc(colRef, objVal).then((e) => {
-        cb()
-      }).catch(err)
-    },
-    batchDoc(rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) {
-      const fixedPath = castPathToString(rootPath)
-      if (fixedPath.length % 2 == 0) {
-        console.warn("path untuk akses updateBatch cukup berhenti di Collection [Firestore.update.batchDoc]")
-        return
-      }
-      const batch = writeBatch(Firestore.db());
-      const value = values.map((x) => {
-        return { [x.key]: x.value }
+    }
+    //@ts-ignore
+    const fRef = conditionsArray.length > 0 ? query(colRef, ...conditionsArray) : colRef
+    let datas: any[] = []
+    //@ts-ignore
+    getDocs(fRef).then((snap) => {
+      snap.docs.forEach((doc) => {
+        datas.push(doc.id)
       })
-      const newValue = Object.assign({}, ...value)
-      docIds.forEach((id) => {
-        const laRef = doc(Firestore.db(), ...fixedPath, id);
-        batch.update(laRef, newValue);
+      cb(datas)
+    }).catch(err)
+  }
+  function getCollectionWhere(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
+    getCollectionWhereOrderBy(database, path, condition, [], cb, err)
+  }
+  function getCollectionOrderBy(database: any, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
+    getCollectionWhereOrderBy(database, path, [], order_by, cb, err)
+  }
+  function getCollectionWhereOrderBy(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
+      return
+    }
+    //@ts-ignore
+    const colRef = collection(database, ...fixedPath)
+    let conditionsArray: any = []
+    if (condition.length > 0) {
+      condition.forEach((c) => {
+        if (conditionIsNotValid(c)) {
+          console.warn("condition tidak boleh undefined", fixedPath)
+        } else {
+          //@ts-ignore
+          conditionsArray.push(where(...c))
+        }
       })
-      batch.commit().then((result) => {
-        callback && callback(result)
-      }).catch((er) => {
-        error && error(er)
+    }
+    let orderArray: any = []
+    if (order_by.length > 0) {
+      order_by.forEach((o) => {
+        //@ts-ignore
+        orderArray.push(orderBy(...o))
       })
-    },
-  },
-  paginate(isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void): void {
+    }
+    // @ts-ignore
+    const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray) : condition ? query(colRef, ...conditionsArray) : order_by ? query(colRef, ...orderArray) : colRef
+
+    let datas: any[] = []
+    // @ts-ignore
+    getDocs(fRef).then((snap) => {
+      snap.docs.forEach((doc) => {
+        datas.push({ data: doc.data(), id: doc.id })
+      })
+      cb(datas)
+    }).catch(err)
+  }
+
+  function addDocument(database: any, path: string[], value: any, cb: () => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.add.doc]")
+      return
+    }
+    const colRef = doc(database, ...fixedPath)
+    setDoc(colRef, value).then((snap) => {
+      cb()
+    }).catch(err)
+  }
+  function addCollection(database: any, path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
+      return
+    }
+    //@ts-ignore
+    const colRef = collection(database, ...fixedPath)
+    addDoc(colRef, value).then((snap) => {
+      cb({ id: snap?.id })
+    }).catch(err)
+  }
+
+  function deleteDocument(database: any, path: string[], cb: () => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.delete.doc]")
+      return
+    }
+    const colRef = doc(database, ...fixedPath)
+    deleteDoc(colRef).then((snap) => {
+      cb()
+    }).catch(err)
+  }
+  function deleteBatchDocument(database: any, rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) {
+    const fixedPath = castPathToString(rootPath)
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
+      return
+    }
+    const batch = writeBatch(database);
+    docIds.forEach((id) => {
+      const laRef = doc(database, ...fixedPath, id);
+      batch.delete(laRef);
+    })
+    batch.commit().then((result) => {
+      callback && callback(result)
+    }).catch((er) => {
+      error && error(er)
+    })
+  }
+
+  function listenCollection(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void): () => void {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
+      return () => { }
+    }
+    //@ts-ignore
+    const colRef = collection(database, ...fixedPath)
+    let conditionsArray: any = []
+    if (condition.length > 0) {
+      condition.forEach((c) => {
+        if (conditionIsNotValid(c)) {
+          console.warn("condition tidak boleh undefined", fixedPath)
+        } else {
+          //@ts-ignore
+          conditionsArray.push(where(...c))
+        }
+      })
+    }
+    let orderArray: any = []
+    if (order_by.length > 0) {
+      order_by.forEach((o) => {
+        //@ts-ignore
+        orderArray.push(orderBy(...o))
+      })
+    }
+    let datas: any[] = []
+
+    const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray)
+      : condition ? query(colRef, ...conditionsArray)
+        : order_by ? query(colRef, ...orderArray) : colRef
+
+    const unsub = onSnapshot(fRef, (snap) => {
+      datas = []
+      snap.docs.forEach((doc) => {
+        datas.push({ data: doc.data(), id: doc.id })
+      })
+      cb(datas)
+    }, err)
+    return () => unsub()
+  }
+  function listenDocument(database: any, path: string[], cb: (dt: any) => void, err?: (error: any) => void): () => void {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
+      return () => { }
+    }
+    // @ts-ignore
+    const colRef = doc(database, ...fixedPath)
+    const unsub = onSnapshot(colRef, (snap) => {
+      cb(snap.data())
+    }, err)
+    return () => unsub()
+  }
+
+  function updateDocument(database: any, path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
+      return
+    }
+    const val = value.map((x) => {
+      return { [x.key]: x.value }
+    })
+    const objVal = Object.assign({}, ...val)
+    const colRef = doc(database, ...fixedPath)
+    updateDoc(colRef, objVal).then((e) => {
+      cb()
+    }).catch(err)
+  }
+  function updateBatchDocument(database: any, rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) {
+    const fixedPath = castPathToString(rootPath)
+    if (fixedPath.length % 2 == 0) {
+      console.warn("path untuk akses updateBatch cukup berhenti di Collection [Firestore.update.batchDoc]")
+      return
+    }
+    const batch = writeBatch(database);
+    const value = values.map((x) => {
+      return { [x.key]: x.value }
+    })
+    const newValue = Object.assign({}, ...value)
+    docIds.forEach((id) => {
+      const laRef = doc(database, ...fixedPath, id);
+      batch.update(laRef, newValue);
+    })
+    batch.commit().then((result) => {
+      callback && callback(result)
+    }).catch((er) => {
+      error && error(er)
+    })
+  }
+
+  function paginate(database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void): void {
     const fixedPath = castPathToString(path)
     if (fixedPath.length % 2 == 0) {
       console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.paginate]")
       return
     }
     //@ts-ignore
-    const colRef = collection(Firestore.db(), ...fixedPath)
+    const colRef = collection(database, ...fixedPath)
 
     let conditionsArray: any = []
     if (condition.length > 0) {
@@ -444,16 +494,39 @@ const Firestore = {
       lastVisible = snap.docs[snap.docs.length - 1]
       cb(datas, snap.empty)
     }).catch(err)
-  },
-  paginateOrderBy(isStartPage: boolean, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    Firestore.paginate(isStartPage, path, [], order_by, 20, cb, err)
-  },
-  paginateWhere(isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    Firestore.paginate(isStartPage, path, condition, [], 20, cb, err)
-  },
-  paginateLimit(isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    Firestore.paginate(isStartPage, path, [], [], limitItem, cb, err)
-  },
-}
+  }
+  function paginateOrderBy(database: any, isStartPage: boolean, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
+    paginate(database, isStartPage, path, [], order_by, 20, cb, err)
+  }
+  function paginateWhere(database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
+    paginate(database, isStartPage, path, condition, [], 20, cb, err)
+  }
+  function paginateLimit(database: any, isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
+    paginate(database, isStartPage, path, [], [], limitItem, cb, err)
+  }
 
-export default Firestore
+  return {
+    init,
+    initAnonymously,
+    getDocument,
+    getCollection,
+    getCollectionIds,
+    getCollectionWhere,
+    getCollectionOrderBy,
+    getCollectionWhereOrderBy,
+    addDocument,
+    addCollection,
+    deleteDocument,
+    deleteBatchDocument,
+    listenCollection,
+    listenDocument,
+    updateDocument,
+    updateBatchDocument,
+    paginate,
+    paginateOrderBy,
+    paginateWhere,
+    paginateLimit,
+    generatePassword,
+    logout
+  }
+}
