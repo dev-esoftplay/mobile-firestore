@@ -106,7 +106,7 @@ export default function useFirestore(): useFirestoreReturn {
               signInWithEmailAndPassword(firebaseAppAuth, email, password)
                 .then((userCredential) => { })
                 .catch((error) => {
-                  if (error.code == "auth/user-not-found") {
+                  if (error.code == "auth/user-not-found" || error.code == "auth/invalid-login-credentials") {
                     doRegister(email, password)
                   } else {
                     throw "ERROR : " + error.code
