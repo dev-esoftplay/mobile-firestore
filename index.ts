@@ -1,9 +1,11 @@
 // useLibs
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LibObject } from "esoftplay/cache/lib/object/import";
 import { LibUtils } from "esoftplay/cache/lib/utils/import";
 import { UserClass } from "esoftplay/cache/user/class/import";
 import esp from "esoftplay/esp";
+import useGlobalState from "esoftplay/global";
 import { FirebaseApp, initializeApp } from "firebase/app";
 import { Auth, createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getReactNativePersistence } from "firebase/auth/react-native";
@@ -69,6 +71,9 @@ const firestoreSettings = {
   useFetchStreams: false
 }
 
+const init: { [appName: string]: any } = {}
+export const userData = useGlobalState(init, { isUserData: true })
+
 export default function useFirestore(): useFirestoreReturn {
 
   function init(appName?: string, config?: any): FirestoreInstance {
@@ -84,40 +89,20 @@ export default function useFirestore(): useFirestoreReturn {
       if (defConfig.hasOwnProperty('projectId') && defConfig.hasOwnProperty('apiKey')) {
         if (user) {
           if (initializedInstances[defAppName]) {
+            if (userData.get()?.[defAppName]?.email != email) {
+              doLogin(initializedInstances[defAppName].auth, email, password, (user) => {
+                userData.set((old: any) => LibObject.set(old, user)(defAppName))
+              })
+            }
             return initializedInstances[defAppName];
           }
 
           const firebaseApp = initializeApp(defConfig, defAppName);
           const firebaseAppAuth = initializeAuth(firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) });
 
-          function doRegister(email: string, password: string) {
-            createUserWithEmailAndPassword(firebaseAppAuth, email, password)
-              .then((userCredential) => { })
-              .catch((error) => {
-                if (error.code == "auth/email-already-in-use") {
-                  doLogin(email, password)
-                } else {
-                  throw "ERROR : " + error.code
-                }
-              });
-          }
-          function doLogin(email: string, password: string) {
-            signOut(firebaseAppAuth).then(() => {
-              signInWithEmailAndPassword(firebaseAppAuth, email, password)
-                .then((userCredential) => { })
-                .catch((error) => {
-                  if (error.code == "auth/user-not-found" || error.code == "auth/invalid-login-credentials") {
-                    doRegister(email, password)
-                  } else {
-                    throw "ERROR : " + error.code
-                  }
-                });
-            }).catch((error) => {
-              console.log("ERROR", error);
-            });
-          }
-
-          doLogin(email, password)
+          doLogin(firebaseAppAuth, email, password, (user) => {
+            userData.set((old: any) => LibObject.set(old, user)(defAppName))
+          })
 
           const firestoreDB = initializeFirestore(firebaseApp, {
             ...firestoreSettings,
@@ -184,11 +169,43 @@ export default function useFirestore(): useFirestoreReturn {
     }
   }
 
-  function logout(firebaseAppAuth: any) {
-    signOut(firebaseAppAuth).then(() => {
+  function doRegister(auth: Auth, email: string, password: string, cb: (dt: any) => void) {
+    createUserWithEmailAndPassword(auth, email, password)
+      .then((userCredential) => {
+        cb(userCredential.user)
+      })
+      .catch((error) => {
+        if (error.code == "auth/email-already-in-use") {
+          doLogin(auth, email, password, cb)
+        } else {
+          throw "ERROR : " + error.code
+        }
+      });
+  }
+  function doLogin(auth: Auth, email: string, password: string, cb: (dt: any) => void) {
+    signOut(auth).then(() => {
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          cb(userCredential.user)
+        })
+        .catch((error) => {
+          if (error.code == "auth/user-not-found" || error.code == "auth/invalid-login-credentials") {
+            doRegister(auth, email, password, cb)
+          } else {
+            throw "ERROR : " + error.code
+          }
+        });
     }).catch((error) => {
       console.log("ERROR", error);
     });
+  }
+
+  function logout(firebaseAppAuth: any) {
+    signOut(firebaseAppAuth).then(() => {
+      userData.reset()
+    }).catch((error) => {
+      console.log("ERROR", error);
+    }).catch((r) => console.log(r))
   }
 
   function generatePassword(unique: string, email: string): string {
