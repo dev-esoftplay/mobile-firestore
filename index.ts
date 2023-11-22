@@ -6,7 +6,7 @@ import { LibUtils } from "esoftplay/cache/lib/utils/import";
 import { UserClass } from "esoftplay/cache/user/class/import";
 import esp from "esoftplay/esp";
 import useGlobalState from "esoftplay/global";
-import { FirebaseApp, initializeApp } from "firebase/app";
+import { FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
 import { Auth, createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getReactNativePersistence } from "firebase/auth/react-native";
 import { FieldPath, Firestore, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from "firebase/firestore";
@@ -40,7 +40,8 @@ export interface useFirestoreReturn {
   paginateWhere: (database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
   paginateLimit: (database: any, isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void,
   generatePassword: (uniquePassword: string, email: string) => string,
-  logout: (auth: any) => void
+  logout: (auth: any) => void,
+  suppressError: (error: FirebaseError) => void
 }
 
 export interface DataId {
@@ -178,7 +179,7 @@ export default function useFirestore(): useFirestoreReturn {
         if (error.code == "auth/email-already-in-use") {
           doLogin(auth, email, password, cb)
         } else {
-          throw "ERROR : " + error.code
+          suppressError(error)
         }
       });
   }
@@ -192,7 +193,7 @@ export default function useFirestore(): useFirestoreReturn {
           if (error.code == "auth/user-not-found" || error.code == "auth/invalid-login-credentials") {
             doRegister(auth, email, password, cb)
           } else {
-            throw "ERROR : " + error.code
+            suppressError(error)
           }
         });
     }).catch((error) => {
@@ -206,6 +207,12 @@ export default function useFirestore(): useFirestoreReturn {
     }).catch((error) => {
       console.log("ERROR", error);
     }).catch((r) => console.log(r))
+  }
+
+  function suppressError(error: FirebaseError) {
+    if (error.code != "auth/too-many-requests") {
+      throw "ERROR : " + error.code
+    }
   }
 
   function generatePassword(unique: string, email: string): string {
@@ -544,6 +551,7 @@ export default function useFirestore(): useFirestoreReturn {
     paginateWhere,
     paginateLimit,
     generatePassword,
-    logout
+    logout,
+    suppressError
   }
 }
