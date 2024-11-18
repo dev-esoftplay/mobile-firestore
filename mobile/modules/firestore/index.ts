@@ -9,7 +9,7 @@ import useGlobalState from "esoftplay/global";
 import { FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
 import { Auth, createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getReactNativePersistence } from "firebase/auth/react-native";
-import { FieldPath, Firestore, OrderByDirection, WhereFilterOp, addDoc, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from "firebase/firestore";
+import { FieldPath, Firestore, OrderByDirection, WhereFilterOp, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from "firebase/firestore";
 
 
 export interface FirestoreInstance {
@@ -18,7 +18,7 @@ export interface FirestoreInstance {
   db: Firestore;
 }
 
-export interface useFirestoreReturn {
+export interface FirestoreIndexReturn {
   init: (appName?: string, config?: any) => FirestoreInstance,
   initAnonymously: (appName?: string, config?: any) => FirestoreInstance,
   getDocument: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) => void,
@@ -66,6 +66,17 @@ function castPathToString(path: any[]) {
   return strings
 }
 
+const makeid = (length: number) => {
+  var result = '';
+  var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  var charactersLength = characters.length;
+  for (var i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() *
+      charactersLength));
+  }
+  return result;
+}
+
 const initializedInstances: { [appName: string]: FirestoreInstance } = {};
 
 const firestoreSettings = {
@@ -75,7 +86,7 @@ const firestoreSettings = {
 const init: { [appName: string]: any } = {}
 export const userData = useGlobalState(init, { isUserData: true })
 
-export default function useFirestore(): useFirestoreReturn {
+export default function FirestoreIndex(): FirestoreIndexReturn {
 
   function init(appName?: string, config?: any): FirestoreInstance {
     const defAppName = appName || "firestore-test";
@@ -345,10 +356,11 @@ export default function useFirestore(): useFirestoreReturn {
       console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
       return
     }
+    const id = makeid(12)
     //@ts-ignore
-    const colRef = collection(database, ...fixedPath)
-    addDoc(colRef, value).then((snap) => {
-      cb({ id: snap?.id })
+    const colRef = doc(database, ...fixedPath, id)
+    setDoc(colRef, value).then((snap) => {
+      cb({ id: id })
     }).catch(err)
   }
 
