@@ -356,7 +356,7 @@ export default function FirestoreIndex(): FirestoreIndexReturn {
       console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
       return
     }
-    const id = makeid(12)
+    const id = (new Date().getTime() / 1000).toFixed(0) + "-" + makeid(5)
     //@ts-ignore
     const colRef = doc(database, ...fixedPath, id)
     setDoc(colRef, value).then((snap) => {
