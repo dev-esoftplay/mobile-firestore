@@ -1,0 +1,13 @@
+
+.expo*/
+index.d.ts
+config.json
+config.debug.json
+config.live.json
+node_modules/
+web-build/
+npm-debug.*
+package-lock.json
+yarn.lock
+yarn-error.log
+			
