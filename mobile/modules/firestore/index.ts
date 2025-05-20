@@ -1,69 +1,16 @@
 // useLibs
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LibObject } from "esoftplay/cache/lib/object/import";
-import { LibUtils } from "esoftplay/cache/lib/utils/import";
-import { UserClass } from "esoftplay/cache/user/class/import";
-import esp from "esoftplay/esp";
-import useGlobalState from "esoftplay/global";
-import { FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
-import { Auth, createUserWithEmailAndPassword, initializeAuth, signInAnonymously, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { getReactNativePersistence } from "firebase/auth/react-native";
-import { FieldPath, Firestore, OrderByDirection, WhereFilterOp, collection, deleteDoc, doc, getDoc, getDocs, initializeFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from "firebase/firestore";
+import { getApps, initializeApp, ReactNativeFirebase } from '@react-native-firebase/app';
+import { createUserWithEmailAndPassword, FirebaseAuthTypes, getAuth, signInWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
+import { addDoc, collection, deleteDoc, doc, FirebaseFirestoreTypes, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from '@react-native-firebase/firestore';
+import esp from 'esoftplay/esp';
+import { useEffect } from 'react';
+import { MMKV } from 'react-native-mmkv';
 
+const storage = new MMKV({ id: "firestore" })
 
-export interface FirestoreInstance {
-  app: FirebaseApp;
-  auth: Auth;
-  db: Firestore;
-}
-
-export interface FirestoreIndexReturn {
-  init: (appName?: string, config?: any) => FirestoreInstance,
-  initAnonymously: (appName?: string, config?: any) => FirestoreInstance,
-  getDocument: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) => void,
-  getCollection: (database: any, path: string[], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void,
-  getCollectionIds: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) => void
-  getCollectionWhere: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
-  getCollectionOrderBy: (database: any, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
-  getCollectionWhereOrderBy: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) => void
-  addDocument: (database: any, path: string[], value: any, cb: () => void, err?: (error: any) => void) => void
-  addCollection: (database: any, path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) => void
-  deleteDocument: (database: any, path: string[], cb: () => void, err?: (error: any) => void) => void
-  deleteBatchDocument: (database: any, rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) => void
-  listenCollection: (database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void) => () => void
-  listenDocument: (database: any, path: string[], cb: (dt: any) => void, err?: (error: any) => void) => () => void
-  updateDocument: (database: any, path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) => void
-  updateBatchDocument: (database: any, rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) => void
-  paginate: (database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
-  paginateOrderBy: (database: any, isStartPage: boolean, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
-  paginateWhere: (database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void
-  paginateLimit: (database: any, isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) => void,
-  generatePassword: (uniquePassword: string, email: string) => string,
-  logout: (auth: any) => void,
-  suppressError: (error: FirebaseError) => void
-}
-
-export interface DataId {
-  id: string,
-  data: any
-}
-
-export type id = string
-let lastVisible: any = null
-
-export interface updateValue {
-  key: string,
-  value: string
-}
-
-function conditionIsNotValid(where: any[]): boolean {
+const conditionIsNotValid = (where: any[]): boolean => {
   return where[2] == undefined || where[0] == undefined
-}
-
-function castPathToString(path: any[]) {
-  const strings = path?.map?.(x => String(x)) || []
-  return strings
 }
 
 const makeid = (length: number) => {
@@ -77,493 +24,478 @@ const makeid = (length: number) => {
   return result;
 }
 
-const initializedInstances: { [appName: string]: FirestoreInstance } = {};
+const generatePassword = (unique: string, email: string): string => {
+  let updatedEmail = '';
+  const atIndex = email?.indexOf?.('@');
+  const first = email?.substring?.(0, atIndex);
+  const last = email?.substring?.(atIndex + 1);
+  const minLength = Math.min(unique?.length || 0, first?.length || 0);
 
-const firestoreSettings = {
-  useFetchStreams: false
+  for (let i = 0; i < minLength; i++) {
+    updatedEmail += unique[i] + first[i];
+  }
+  if (unique.length > minLength) {
+    updatedEmail += unique.slice(minLength);
+  } else if (first.length > minLength) {
+    updatedEmail += first.slice(minLength);
+  }
+  return updatedEmail + "@" + last;
 }
 
-const init: { [appName: string]: any } = {}
-export const userData = useGlobalState(init, { isUserData: true })
+let lastVisible: any = null
+const APPS_KEY = 'firebase-user'
 
-export default function FirestoreIndex(): FirestoreIndexReturn {
+type Condition = [fieldPath?: string | number | FirebaseFirestoreTypes.FieldPath, opStr?: FirebaseFirestoreTypes.WhereFilterOp, value?: any];
+type OrderBy = [fieldPath: string | number | FirebaseFirestoreTypes.FieldPath, directionStr?: "asc" | "desc"];
 
-  function init(appName?: string, config?: any): FirestoreInstance {
-    const defAppName = appName || "firestore-test";
-    const defConfig = config || esp.config("firebase");
-    const user = UserClass.state().get()
+export default function UseFirestore() {
+  const defConfig: ReactNativeFirebase.FirebaseAppOptions = {}
 
-    const email = user?.email
-    const pass = LibUtils.shorten(user?.email + "" + user?.id)
-    const password = generatePassword(pass, email)
+  const defAppName = "[DEFAULT]"
 
-    if (esp.config().hasOwnProperty('firebase')) {
-      if (defConfig.hasOwnProperty('projectId') && defConfig.hasOwnProperty('apiKey')) {
-        if (user) {
-          if (initializedInstances[defAppName]) {
-            if (userData.get()?.[defAppName]?.email != email) {
-              doLogin(initializedInstances[defAppName].auth, email, password, (user) => {
-                userData.set((old: any) => LibObject.set(old, user)(defAppName))
-              })
-            }
-            return initializedInstances[defAppName];
-          }
+  const user = esp.mod("user/class").state().get()
+  const email = user?.email
+  const pass = esp.mod("lib/utils").shorten(user?.email + "" + user?.id)
+  const password = generatePassword(pass, email)
 
-          const firebaseApp = initializeApp(defConfig, defAppName);
-          const firebaseAppAuth = initializeAuth(firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) });
-
-          doLogin(firebaseAppAuth, email, password, (user) => {
-            userData.set((old: any) => LibObject.set(old, user)(defAppName))
-          })
-
-          const firestoreDB = initializeFirestore(firebaseApp, {
-            ...firestoreSettings,
-            experimentalForceLongPolling: true,
-          });
-
-          const firestoreInstance: FirestoreInstance = {
-            app: firebaseApp,
-            auth: firebaseAppAuth,
-            db: firestoreDB,
-          };
-          initializedInstances[defAppName] = firestoreInstance;
-
-          return firestoreInstance;
-        } else {
-          return {
-            app: {},
-            auth: {},
-            db: {},
-          }
-        }
-      } else {
-        throw "ERROR : firebase projectId or apiKey not found in config.json"
-      }
-    } else {
-      throw "ERROR : firebase not found in config.json"
-    }
-
+  const castPathToString = (path: any[]): string => {
+    const strings = path?.map?.(x => String(x)) || []
+    return strings.join("/")
+  }
+  function setUserData(appName: string, user: any) {
+    const currentData = getAllUserData()
+    currentData[appName] = user
+    storage.set(APPS_KEY, JSON.stringify(currentData))
+  }
+  function getUserData(appName: string) {
+    const currentData = getAllUserData()
+    return currentData[appName] || {}
+  }
+  function getAllUserData() {
+    const data: any = storage.getString(APPS_KEY)
+    return data ? typeof data == "string" ? JSON.parse(data) : data : {}
+  }
+  function removeAllUserData() {
+    storage.delete(APPS_KEY)
   }
 
-  function initAnonymously(appName?: string, config?: any): FirestoreInstance {
-    const defAppName = appName || "firestore-test";
-    const defConfig = config || esp.config("firebase");
+  const init = async (config = defConfig, appName = defAppName) => {
+    try {
+      const existingApp = getApps().find(app => app.name === appName);
+      let app: ReactNativeFirebase.FirebaseApp
 
-    if (esp.config().hasOwnProperty('firebase')) {
-      if (defConfig.hasOwnProperty('projectId') && defConfig.hasOwnProperty('apiKey')) {
-        if (initializedInstances[defAppName]) {
-          return initializedInstances[defAppName];
-        }
+      if (!existingApp) {
+        app = initializeApp(config, appName);
+        // console.log('App initialized:', app);
+      } else {
+        // console.log('App already exists:', existingApp.name);
+        app = existingApp;
+      }
 
-        const firebaseApp = initializeApp(defConfig, defAppName);
-        const firebaseAppAuth = initializeAuth(firebaseApp, { persistence: getReactNativePersistence(AsyncStorage) });
-
-        signInAnonymously(firebaseAppAuth)
-
-        const firestoreDB = initializeFirestore(firebaseApp, {
-          ...firestoreSettings,
-          experimentalForceLongPolling: true,
+      // Check if user data exists
+      if (esp.mod("user/class").state().get()?.email) {
+        await register(app, email, password, (credential) => {
+          setUserData(appName, credential.user);
         });
-
-        const firestoreInstance: FirestoreInstance = {
-          app: firebaseApp,
-          auth: firebaseAppAuth,
-          db: firestoreDB,
-        };
-        initializedInstances[defAppName] = firestoreInstance;
-
-        return firestoreInstance;
-      } else {
-        throw "ERROR : firebase projectId or apiKey not found in config.json"
       }
-    } else {
-      throw "ERROR : firebase not found in config.json"
+
+    } catch (error) {
+      console.error('Error initializing app:', error);
+    }
+  };
+
+  const instance = (appName = defAppName) => {
+    const app = getApps().find(app => app.name === appName);
+    return app || null;
+  };
+
+  const register = async (
+    app: ReactNativeFirebase.FirebaseApp,
+    email: string,
+    password: string,
+    callback: (credential: FirebaseAuthTypes.UserCredential) => void
+  ) => {
+    const authInstance = getAuth(app);
+    try {
+      const credential = await createUserWithEmailAndPassword(authInstance, email, password);
+      callback(credential);
+    } catch (error: any) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          return login(app, email, password, callback);
+        case 'auth/invalid-email':
+          console.error('Invalid email address format.');
+          break;
+        case 'auth/unknown':
+          console.warn('Unknown error occurred. Retrying registration.');
+          return register(app, email, password, callback);
+        case 'auth/configuration-not':
+          console.error('Authentication is not configured for this Firebase project.');
+          break;
+        case 'auth/operation-not-allowed':
+          console.error('Sign-in provider is not enabled. Check Firebase console.');
+          break;
+        default:
+          console.error('Registration error:', error.message || error);
+      }
     }
   }
 
-  function doRegister(auth: Auth, email: string, password: string, cb: (dt: any) => void) {
-    createUserWithEmailAndPassword(auth, email, password)
-      .then((userCredential) => {
-        cb(userCredential.user)
-      })
-      .catch((error) => {
-        if (error.code == "auth/email-already-in-use") {
-          doLogin(auth, email, password, cb)
-        } else {
-          suppressError(error)
-        }
+  const login = async (
+    app: ReactNativeFirebase.FirebaseApp,
+    email: string,
+    password: string,
+    callback: (credential: FirebaseAuthTypes.UserCredential) => void,
+  ) => {
+    const authInstance = getAuth(app);
+    try {
+      const credential = await signInWithEmailAndPassword(authInstance, email, password);
+      callback(credential);
+    } catch (error: any) {
+      switch (error.code) {
+        case 'auth/user-not-found':
+          console.error('No user found with this email.');
+          break;
+        case 'auth/wrong-password':
+          console.error('Incorrect password. Please try again.');
+          break;
+        case 'auth/too-many-requests':
+          console.warn('Too many attempts. Please try again later.');
+          break;
+        case 'auth/invalid-email':
+          console.error('Invalid email address format.');
+          break;
+        case 'auth/network-request-failed':
+          console.error('Network error. Please check your connection.');
+          break;
+        default:
+          console.error('Login error:', error.message || error);
+      }
+    }
+  }
+
+  const logout = async (): Promise<void> => {
+    try {
+      removeAllUserData();
+      const signOutPromises = getApps().map(async (app: any) => {
+        const authInstance = getAuth(app);
+        await signOut(authInstance);
       });
-  }
-  function doLogin(auth: Auth, email: string, password: string, cb: (dt: any) => void) {
-    signOut(auth).then(() => {
-      signInWithEmailAndPassword(auth, email, password)
-        .then((userCredential) => {
-          cb(userCredential.user)
-        })
-        .catch((error) => {
-          if (error.code == "auth/user-not-found" || error.code == "auth/invalid-login-credentials") {
-            doRegister(auth, email, password, cb)
-          } else {
-            suppressError(error)
-          }
-        });
-    }).catch((error) => {
-      console.log("ERROR", error);
-    });
-  }
-
-  function logout(firebaseAppAuth: any) {
-    signOut(firebaseAppAuth).then(() => {
-      userData.reset()
-    }).catch((error) => {
-      console.log("ERROR", error);
-    }).catch((r) => console.log(r))
-  }
-
-  function suppressError(error: FirebaseError) {
-    if (error.code != "auth/too-many-requests") {
-      throw "ERROR : " + error.code
+      await Promise.all(signOutPromises);
+      // console.log('All users signed out successfully.');
+    } catch (error: any) {
+      switch (error.code) {
+        case 'auth/no-current-user':
+          console.log('No user signed in.');
+          break;
+        default:
+          console.log('Logout error:', error.message || error);
+      }
     }
   }
 
-  function generatePassword(unique: string, email: string): string {
-    let updatedEmail = '';
-    const atIndex = email?.indexOf?.('@');
-    const first = email?.substring?.(0, atIndex);
-    const last = email?.substring?.(atIndex + 1);
-    const minLength = Math.min(unique?.length || 0, first?.length || 0);
-
-    for (let i = 0; i < minLength; i++) {
-      updatedEmail += unique[i] + first[i];
-    }
-
-    if (unique.length > minLength) {
-      updatedEmail += unique.slice(minLength);
-    } else if (first.length > minLength) {
-      updatedEmail += first.slice(minLength);
-    }
-
-    return updatedEmail + "@" + last;
-  }
-
-  function getDocument(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown], cb: (arr: DataId) => void, err?: (error: any) => void) {
+  const getDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: { id: string, data: any }) => void, error?: () => void) => {
     const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 > 0) {
+    if (fixedPath.split("/").length % 2 > 0) {
       console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.get.doc]")
       return
     }
-    const colRef = doc(database, ...fixedPath)
-    //@ts-ignore
-    const fRef = (!condition || condition.length < 3) ? colRef : query(colRef, where(...condition))
-    //@ts-ignore
-    getDoc(fRef).then((snap) => {
-      cb({ data: snap.data(), id: snap.id })
-    }).catch(err)
-  }
-  function getCollection(database: any, path: string[], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-    getCollectionWhereOrderBy(database, path, [], [], cb, err)
-  }
-  function getCollectionIds(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: id[]) => void, err?: (error: any) => void) {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collectionIds]")
-      return
-    }
-    //@ts-ignore
-    const colRef = collection(database, ...fixedPath)
-    let conditionsArray: any = []
-    if (condition.length > 0) {
-      condition.forEach((c) => {
-        if (conditionIsNotValid(c)) {
-          console.warn("condition tidak boleh undefined", fixedPath)
-        } else {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
-        }
-      })
-    }
-    //@ts-ignore
-    const fRef = conditionsArray.length > 0 ? query(colRef, ...conditionsArray) : colRef
-    let datas: any[] = []
-    //@ts-ignore
-    getDocs(fRef).then((snap) => {
-      snap.docs.forEach((doc) => {
-        datas.push(doc.id)
-      })
-      cb(datas)
-    }).catch(err)
-  }
-  function getCollectionWhere(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-    getCollectionWhereOrderBy(database, path, condition, [], cb, err)
-  }
-  function getCollectionOrderBy(database: any, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-    getCollectionWhereOrderBy(database, path, [], order_by, cb, err)
-  }
-  function getCollectionWhereOrderBy(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (arr: DataId[]) => void, err?: (error: any) => void) {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
-      return
-    }
-    //@ts-ignore
-    const colRef = collection(database, ...fixedPath)
-    let conditionsArray: any = []
-    if (condition.length > 0) {
-      condition.forEach((c) => {
-        if (conditionIsNotValid(c)) {
-          console.warn("condition tidak boleh undefined", fixedPath)
-        } else {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
-        }
-      })
-    }
-    let orderArray: any = []
-    if (order_by.length > 0) {
-      order_by.forEach((o) => {
-        //@ts-ignore
-        orderArray.push(orderBy(...o))
-      })
-    }
-    // @ts-ignore
-    const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray) : condition ? query(colRef, ...conditionsArray) : order_by ? query(colRef, ...orderArray) : colRef
-
-    let datas: any[] = []
-    // @ts-ignore
-    getDocs(fRef).then((snap) => {
-      snap.docs.forEach((doc) => {
-        datas.push({ data: doc.data(), id: doc.id })
-      })
-      cb(datas)
-    }).catch(err)
+    const db = getFirestore(app)
+    const ref = doc(db, fixedPath)
+    getDoc(ref).then((snapshot: FirebaseFirestoreTypes.DocumentSnapshot) => {
+      callback({ data: snapshot.data(), id: snapshot.id })
+    }).catch((error))
   }
 
-  function addDocument(database: any, path: string[], value: any, cb: () => void, err?: (error: any) => void) {
+  const addDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], value: any, callback: () => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 > 0) {
-      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.add.doc]")
-      return
-    }
-    const colRef = doc(database, ...fixedPath)
-    setDoc(colRef, value).then((snap) => {
-      cb()
-    }).catch(err)
-  }
-  function addCollection(database: any, path: string[], value: any, cb: (dt: any) => void, err?: (error: any) => void) {
-    const fixedPath = castPathToString(path)
+    const db = getFirestore(app)
 
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
-      return
+    if (fixedPath.split("/").length % 2 > 0) {
+      const docRef = collection(db, fixedPath)
+      addDoc(docRef, value)
+        .then(() => {
+          callback()
+        }).catch(error)
+    } else {
+      const docRef = doc(db, fixedPath)
+      setDoc(docRef, value)
+        .then(() => {
+          callback()
+        }).catch(error)
     }
-    const id = (new Date().getTime() / 1000).toFixed(0) + "-" + makeid(5)
-    //@ts-ignore
-    const colRef = doc(database, ...fixedPath, id)
-    setDoc(colRef, value).then((snap) => {
-      cb({ id: id })
-    }).catch(err)
   }
 
-  function deleteDocument(database: any, path: string[], cb: () => void, err?: (error: any) => void) {
+  const updateDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], values: { key: string, value: string | number }[], callback: () => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 > 0) {
-      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.delete.doc]")
-      return
-    }
-    const colRef = doc(database, ...fixedPath)
-    deleteDoc(colRef).then((snap) => {
-      cb()
-    }).catch(err)
-  }
-  function deleteBatchDocument(database: any, rootPath: string[], docIds: string[], callback?: (res: any) => void, error?: (error: any) => void) {
-    const fixedPath = castPathToString(rootPath)
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
-      return
-    }
-    const batch = writeBatch(database);
-    docIds.forEach((id) => {
-      const laRef = doc(database, ...fixedPath, id);
-      batch.delete(laRef);
-    })
-    batch.commit().then((result) => {
-      callback && callback(result)
-    }).catch((er) => {
-      error && error(er)
-    })
-  }
-
-  function listenCollection(database: any, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
-      return () => { }
-    }
-    //@ts-ignore
-    const colRef = collection(database, ...fixedPath)
-    let conditionsArray: any = []
-    if (condition.length > 0) {
-      condition.forEach((c) => {
-        if (conditionIsNotValid(c)) {
-          console.warn("condition tidak boleh undefined", fixedPath)
-        } else {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
-        }
-      })
-    }
-    let orderArray: any = []
-    if (order_by.length > 0) {
-      order_by.forEach((o) => {
-        //@ts-ignore
-        orderArray.push(orderBy(...o))
-      })
-    }
-    let datas: any[] = []
-
-    const fRef = (condition && order_by) ? query(colRef, ...conditionsArray, ...orderArray)
-      : condition ? query(colRef, ...conditionsArray)
-        : order_by ? query(colRef, ...orderArray) : colRef
-
-    const unsub = onSnapshot(fRef, (snap) => {
-      datas = []
-      snap.docs.forEach((doc) => {
-        datas.push({ data: doc.data(), id: doc.id })
-      })
-      cb(datas)
-    }, err)
-    return () => unsub()
-  }
-  function listenDocument(database: any, path: string[], cb: (dt: any) => void, err?: (error: any) => void): () => void {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 > 0) {
-      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
-      return () => { }
-    }
-    // @ts-ignore
-    const colRef = doc(database, ...fixedPath)
-    const unsub = onSnapshot(colRef, (snap) => {
-      cb(snap.data())
-    }, err)
-    return () => unsub()
-  }
-
-  function updateDocument(database: any, path: string[], value: updateValue[], cb: () => void, err?: (error: any) => void) {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 > 0) {
+    if (fixedPath.split("/").length % 2 > 0) {
       console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.update.doc]")
       return
     }
-    const val = value.map((x) => {
+    const db = getFirestore(app)
+    const val = values.map((x) => {
       return { [x.key]: x.value }
     })
     const objVal = Object.assign({}, ...val)
-    const colRef = doc(database, ...fixedPath)
+    const colRef = doc(db, fixedPath)
     updateDoc(colRef, objVal).then((e) => {
-      cb()
-    }).catch(err)
+      callback()
+    }).catch(error)
   }
-  function updateBatchDocument(database: any, rootPath: string[], docIds: string[], values: updateValue[], callback?: (res: any) => void, error?: (error: any) => void) {
+
+  const updateBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], deletedDocumentIds: string[], values: { key: string, value: string | number }[], callback?: (res: any) => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(rootPath)
-    if (fixedPath.length % 2 == 0) {
+    if (fixedPath.split("/").length % 2 == 0) {
       console.warn("path untuk akses updateBatch cukup berhenti di Collection [Firestore.update.batchDoc]")
       return
     }
-    const batch = writeBatch(database);
+
     const value = values.map((x) => {
       return { [x.key]: x.value }
     })
     const newValue = Object.assign({}, ...value)
-    docIds.forEach((id) => {
-      const laRef = doc(database, ...fixedPath, id);
-      batch.update(laRef, newValue);
-    })
-    batch.commit().then((result) => {
+
+    const db = getFirestore(app)
+    const batch = writeBatch(db)
+    const processBatch = async () => {
+      const promises = deletedDocumentIds.map(async (id) => {
+        const docRef = doc(db, fixedPath + "/" + id)
+        batch.update(docRef, newValue)
+      });
+      await Promise.all(promises)
+      await batch.commit()
+    }
+
+    processBatch().then((result) => {
       callback && callback(result)
     }).catch((er) => {
       error && error(er)
     })
   }
 
-  function paginate(database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void): void {
+  const deleteDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: () => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(path)
-    if (fixedPath.length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.paginate]")
+    if (fixedPath.split("/").length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.delete.doc]")
       return
     }
-    //@ts-ignore
-    const colRef = collection(database, ...fixedPath)
+    const db = getFirestore(app)
+    const ref = doc(db, fixedPath)
+    deleteDoc(ref).then(() => {
+      callback()
+    }).catch((error))
+  }
 
-    let conditionsArray: any = []
-    if (condition.length > 0) {
-      condition.forEach((c) => {
-        if (conditionIsNotValid(c)) {
-          console.warn("condition tidak boleh undefined", fixedPath)
-        } else {
-          //@ts-ignore
-          conditionsArray.push(where(...c))
-        }
-      })
+  const deleteBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], deletedDocumentIds: string[], callback?: (res: any) => void, error?: (error: any) => void) => {
+    const fixedPath = castPathToString(rootPath)
+    if (fixedPath.split("/").length % 2 == 0) {
+      console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
+      return
+    }
+    const db = getFirestore(app)
+    const batch = writeBatch(db)
+
+    const processBatch = async () => {
+      const promises = deletedDocumentIds.map(async (id) => {
+        const docRef = doc(db, fixedPath + "/" + id)
+        batch.delete(docRef)
+      });
+      await Promise.all(promises)
+      await batch.commit()
     }
 
-    let orderArray: any = []
-    if (order_by.length > 0) {
-      order_by.forEach((o) => {
-        //@ts-ignore
-        orderArray.push(orderBy(...o))
-      })
+    processBatch().then((result) => {
+      callback && callback(result)
+    }).catch((er) => {
+      error && error(er)
+    })
+  }
+
+  const addCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], value: any, callback: (data?: { id: string }) => void, error?: (error: any) => void) => {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.split("/").length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.add.collection]")
+      return
+    }
+    const id = (new Date().getTime() / 1000).toFixed(0) + "-" + makeid(5)
+    addDocument(app, [...path, id], value, () => callback({ id }), error)
+  }
+
+  const getCollectionWhereOrderBy = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any[]) => void, error?: (error: any) => void) => {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.split("/").length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
+      return
     }
 
-    const fRef = (conditionsArray.length > 0 && orderArray.length > 0) ? query(colRef, ...conditionsArray, ...orderArray, limit(limitItem))
-      : conditionsArray.length > 0 ? query(colRef, ...conditionsArray, limit(limitItem))
-        : orderArray.length > 0 ? query(colRef, ...orderArray, limit(limitItem)) : colRef
+    const database = getFirestore(app)
+    let queryRef: FirebaseFirestoreTypes.Query = collection(database, fixedPath)
 
-    const fRef1 = (conditionsArray.length > 0 && orderArray.length > 0) ? query(colRef, ...conditionsArray, ...orderArray, startAfter(lastVisible || 0), limit(limitItem))
-      : conditionsArray.length > 0 ? query(colRef, ...conditionsArray, startAfter(lastVisible || 0), limit(limitItem))
-        : orderArray.length > 0 ? query(colRef, ...orderArray, startAfter(lastVisible || 0), limit(limitItem)) : colRef
+    queryRef = applyConditions(queryRef, conditions)
+    queryRef = applyOrdering(queryRef, orderby)
 
     let datas: any[] = []
-    getDocs(isStartPage ? fRef : fRef1).then((snap) => {
+    getDocs(queryRef).then((snap) => {
       snap.docs.forEach((doc) => {
         datas.push({ data: doc.data(), id: doc.id })
       })
-      lastVisible = snap.docs[snap.docs.length - 1]
-      cb(datas, snap.empty)
-    }).catch(err)
+      callback(datas)
+    }).catch(error)
   }
-  function paginateOrderBy(database: any, isStartPage: boolean, path: string[], order_by: [fieldPath?: string | FieldPath, directionStr?: OrderByDirection | undefined][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    paginate(database, isStartPage, path, [], order_by, 20, cb, err)
+
+  const getCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: any[]) => void, error?: (error: any) => void) => {
+    getCollectionWhereOrderBy(app, path, [], [], callback, error)
   }
-  function paginateWhere(database: any, isStartPage: boolean, path: string[], condition: [fieldPath?: string | FieldPath, opStr?: WhereFilterOp, value?: unknown][], cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    paginate(database, isStartPage, path, condition, [], 20, cb, err)
+
+  const getCollectionIds = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (ids: string[]) => void, error?: (error: any) => void) => {
+    getCollectionWhereOrderBy(app, path, conditions, orderby, (data) => {
+      let ids: string[] = []
+      data.forEach(doc => {
+        ids.push(doc.id)
+      })
+      callback(ids)
+    }, error)
   }
-  function paginateLimit(database: any, isStartPage: boolean, path: string[], limitItem: number, cb: (dt: any, endReach: boolean) => void, err?: (error: any) => void) {
-    paginate(database, isStartPage, path, [], [], limitItem, cb, err)
+
+  const getCollectionWhere = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], callback: (data: any[]) => void, error?: (error: any) => void) => {
+    getCollectionWhereOrderBy(app, path, conditions, [], callback, error)
   }
+
+  const getCollectionOrderBy = (app: ReactNativeFirebase.FirebaseApp, path: string[], orderby: OrderBy[], callback: (data: any[]) => void, error?: (error: any) => void) => {
+    getCollectionWhereOrderBy(app, path, [], orderby, callback, error)
+  }
+
+  const listenDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: any) => void, error?: (error: any) => void) => {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.split("/").length % 2 > 0) {
+      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
+      return () => { }
+    }
+
+    const db = getFirestore(app)
+    const colRef = doc(db, fixedPath)
+
+    useEffect(() => {
+      const subscriber = onSnapshot(colRef, docs => {
+        if (docs.exists) {
+          callback({ data: docs.data(), id: docs.id })
+        } else
+          callback(null)
+      }, error)
+      return () => subscriber()
+    }, [])
+  }
+
+  const listenCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any) => void, error?: (error: any) => void) => {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.split("/").length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
+      return () => { }
+    }
+
+    const database = getFirestore(app)
+    let queryRef: FirebaseFirestoreTypes.Query = collection(database, fixedPath)
+
+    queryRef = applyConditions(queryRef, conditions);
+    queryRef = applyOrdering(queryRef, orderby);
+
+    let datas: any[] = []
+    useEffect(() => {
+      const subscriber = onSnapshot(queryRef, snaps => {
+        datas = []
+        if (!snaps?.empty)
+          snaps?.docs?.forEach((doc) => {
+            datas.push({ data: doc.data(), id: doc.id })
+          })
+        callback(datas)
+      }, error)
+      return () => subscriber()
+    }, [])
+  }
+
+  const paginate = (
+    app: ReactNativeFirebase.FirebaseApp,
+    isStartPage: boolean,
+    path: string[],
+    conditions: Condition[],
+    orderby: OrderBy[],
+    limitPerPage: number,
+    callback: (data: any[], endReach: boolean) => void,
+    error?: (error: any) => void
+  ) => {
+    const fixedPath = castPathToString(path)
+    if (fixedPath.split("/").length % 2 == 0) {
+      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.paginate]")
+      return
+    }
+
+    const db = getFirestore(app)
+    let queryRef: FirebaseFirestoreTypes.Query = collection(db, fixedPath);
+
+    queryRef = applyConditions(queryRef, conditions);
+    queryRef = applyOrdering(queryRef, orderby);
+    queryRef = applyPagination(queryRef, isStartPage, limitPerPage);
+
+    let allData: any[] = []
+    getDocs(queryRef).then((snap) => {
+      snap.docs.forEach((r) => {
+        allData.push(r.id)
+      })
+      if (snap.docs.length > 0) {
+        lastVisible = snap.docs[snap.docs.length - 1];
+      }
+      callback(allData, snap.empty)
+    }).catch(error)
+  }
+
+  const applyConditions = (queryRef: FirebaseFirestoreTypes.Query, conditions: Condition[]): FirebaseFirestoreTypes.Query => {
+    if (conditions && conditions.length > 0) {
+      conditions.forEach((c) => {
+        if (!conditionIsNotValid(c)) {
+          queryRef = query(queryRef, where(c[0] as string, c[1] as FirebaseFirestoreTypes.WhereFilterOp, c[2]));
+        }
+      });
+    }
+    return queryRef;
+  };
+
+  const applyOrdering = (queryRef: FirebaseFirestoreTypes.Query, orderby: OrderBy[]): FirebaseFirestoreTypes.Query => {
+    if (orderby && orderby.length > 0) {
+      orderby.forEach((o) => {
+        queryRef = query(queryRef, orderBy(o[0] as string, o[1]));
+      });
+    }
+    return queryRef;
+  };
+
+  const applyPagination = (queryRef: FirebaseFirestoreTypes.Query, isStartPage: boolean, limitPerPage: number): FirebaseFirestoreTypes.Query => {
+    if (!isStartPage && lastVisible) {
+      queryRef = query(queryRef, startAfter(lastVisible));
+    }
+    return query(queryRef, limit(limitPerPage));
+  };
 
   return {
     init,
-    initAnonymously,
+    getUserData,
+    logout,
+    instance,
+    addDocument,
     getDocument,
+    updateDocument,
+    updateBatchDocument,
+    deleteDocument,
+    deleteBatchDocument,
+    addCollection,
+    getCollectionWhereOrderBy,
     getCollection,
     getCollectionIds,
     getCollectionWhere,
     getCollectionOrderBy,
-    getCollectionWhereOrderBy,
-    addDocument,
-    addCollection,
-    deleteDocument,
-    deleteBatchDocument,
-    listenCollection,
     listenDocument,
-    updateDocument,
-    updateBatchDocument,
+    listenCollection,
     paginate,
-    paginateOrderBy,
-    paginateWhere,
-    paginateLimit,
-    generatePassword,
-    logout,
-    suppressError
+    castPathToString,
+    generatePassword
   }
 }
