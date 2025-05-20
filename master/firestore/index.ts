@@ -1,10 +1,11 @@
 // useLibs
 
+globalThis.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
+
 import { getApps, initializeApp, ReactNativeFirebase } from '@react-native-firebase/app';
 import { createUserWithEmailAndPassword, FirebaseAuthTypes, getAuth, signInWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
 import { addDoc, collection, deleteDoc, doc, FirebaseFirestoreTypes, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from '@react-native-firebase/firestore';
 import esp from 'esoftplay/esp';
-import { useEffect } from 'react';
 import { MMKV } from 'react-native-mmkv';
 
 const storage = new MMKV({ id: "firestore" })
@@ -243,7 +244,7 @@ export default function UseFirestore() {
     }).catch(error)
   }
 
-  const updateBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], deletedDocumentIds: string[], values: { key: string, value: string | number }[], callback?: (res: any) => void, error?: (error: any) => void) => {
+  const updateBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], documentIds: string[], values: { key: string, value: string | number }[], callback?: (res: any) => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(rootPath)
     if (fixedPath.split("/").length % 2 == 0) {
       console.warn("path untuk akses updateBatch cukup berhenti di Collection [Firestore.update.batchDoc]")
@@ -258,7 +259,7 @@ export default function UseFirestore() {
     const db = getFirestore(app)
     const batch = writeBatch(db)
     const processBatch = async () => {
-      const promises = deletedDocumentIds.map(async (id) => {
+      const promises = documentIds.map(async (id) => {
         const docRef = doc(db, fixedPath + "/" + id)
         batch.update(docRef, newValue)
       });
@@ -286,7 +287,7 @@ export default function UseFirestore() {
     }).catch((error))
   }
 
-  const deleteBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], deletedDocumentIds: string[], callback?: (res: any) => void, error?: (error: any) => void) => {
+  const deleteBatchDocument = (app: ReactNativeFirebase.FirebaseApp, rootPath: string[], documentIds: string[], callback?: (res: any) => void, error?: (error: any) => void) => {
     const fixedPath = castPathToString(rootPath)
     if (fixedPath.split("/").length % 2 == 0) {
       console.warn("path untuk akses deleteBatch cukup berhenti di Collection [Firestore.delete.batchDoc]")
@@ -296,7 +297,7 @@ export default function UseFirestore() {
     const batch = writeBatch(db)
 
     const processBatch = async () => {
-      const promises = deletedDocumentIds.map(async (id) => {
+      const promises = documentIds.map(async (id) => {
         const docRef = doc(db, fixedPath + "/" + id)
         batch.delete(docRef)
       });
@@ -365,52 +366,52 @@ export default function UseFirestore() {
     getCollectionWhereOrderBy(app, path, [], orderby, callback, error)
   }
 
-  const listenDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: any) => void, error?: (error: any) => void) => {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.split("/").length % 2 > 0) {
-      console.warn("path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]")
-      return () => { }
+  const listenDocument = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: any | null) => void, error?: (error: any) => void): (() => void) => {
+    const fixedPath = castPathToString(path);
+    if (fixedPath.split("/").length % 2 !== 0) {
+      console.warn("Path untuk akses Doc data tidak boleh berhenti di Collection [Firestore.listen.doc]");
+      return () => { };
     }
 
-    const db = getFirestore(app)
-    const colRef = doc(db, fixedPath)
+    const db = getFirestore(app);
+    const docRef = doc(db, fixedPath);
 
-    useEffect(() => {
-      const subscriber = onSnapshot(colRef, docs => {
-        if (docs.exists) {
-          callback({ data: docs.data(), id: docs.id })
-        } else
-          callback(null)
-      }, error)
-      return () => subscriber()
-    }, [])
+    const unsubscribe = onSnapshot(docRef, (docs) => {
+      if (docs.exists) {
+        callback({ data: docs.data(), id: docs.id });
+      } else {
+        callback(null);
+      }
+    }, error);
+
+    return unsubscribe;
   }
 
-  const listenCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any) => void, error?: (error: any) => void) => {
-    const fixedPath = castPathToString(path)
-    if (fixedPath.split("/").length % 2 == 0) {
-      console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]")
-      return () => { }
+  const listenCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any) => void, error?: (error: any) => void): (() => void) => {
+    const fixedPath = castPathToString(path);
+    if (fixedPath.split("/").length % 2 === 0) {
+      console.warn("Path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.listen.collection]");
+      return () => { };
     }
 
-    const database = getFirestore(app)
-    let queryRef: FirebaseFirestoreTypes.Query = collection(database, fixedPath)
+    const database = getFirestore(app);
+    let queryRef: FirebaseFirestoreTypes.Query = collection(database, fixedPath);
 
     queryRef = applyConditions(queryRef, conditions);
     queryRef = applyOrdering(queryRef, orderby);
 
-    let datas: any[] = []
-    useEffect(() => {
-      const subscriber = onSnapshot(queryRef, snaps => {
-        datas = []
-        if (!snaps?.empty)
-          snaps?.docs?.forEach((doc) => {
-            datas.push({ data: doc.data(), id: doc.id })
-          })
-        callback(datas)
-      }, error)
-      return () => subscriber()
-    }, [])
+    const unsubscribe = onSnapshot(queryRef, (snaps) => {
+      const datas: any[] = [];
+      if (!snaps?.empty) {
+        snaps.docs.forEach((doc) => {
+          datas.push({ data: doc.data(), id: doc.id });
+        });
+      }
+      console.log({ datas })
+      callback(datas);
+    }, error);
+
+    return unsubscribe;
   }
 
   const paginate = (
