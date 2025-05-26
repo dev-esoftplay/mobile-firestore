@@ -407,7 +407,6 @@ export default function UseFirestore() {
           datas.push({ data: doc.data(), id: doc.id });
         });
       }
-      console.log({ datas })
       callback(datas);
     }, error);
 
