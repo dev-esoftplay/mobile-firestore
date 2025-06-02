@@ -322,7 +322,7 @@ export default function UseFirestore() {
     addDocument(app, [...path, id], value, () => callback({ id }), error)
   }
 
-  const getCollectionWhereOrderBy = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any[]) => void, error?: (error: any) => void) => {
+  const getCollectionWhereOrderBy = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], callback: (data: any[]) => void, error?: (error: any) => void, limitasi?: number) => {
     const fixedPath = castPathToString(path)
     if (fixedPath.split("/").length % 2 == 0) {
       console.warn("path untuk akses Collection data tidak boleh berhenti di Doc [Firestore.get.collection]")
@@ -334,6 +334,9 @@ export default function UseFirestore() {
 
     queryRef = applyConditions(queryRef, conditions)
     queryRef = applyOrdering(queryRef, orderby)
+    if (limitasi) {
+      queryRef = applyLimiting(queryRef, limitasi)
+    }
 
     let datas: any[] = []
     getDocs(queryRef).then((snap) => {
@@ -344,6 +347,9 @@ export default function UseFirestore() {
     }).catch(error)
   }
 
+  const getCollectionLimit = (app: ReactNativeFirebase.FirebaseApp, path: string[], conditions: Condition[], orderby: OrderBy[], limitasi: number = 1, callback: (data: any[]) => void, error?: (error: any) => void) => {
+    getCollectionWhereOrderBy(app, path, conditions, orderby, callback, error, limitasi)
+  }
   const getCollection = (app: ReactNativeFirebase.FirebaseApp, path: string[], callback: (data: any[]) => void, error?: (error: any) => void) => {
     getCollectionWhereOrderBy(app, path, [], [], callback, error)
   }
@@ -468,6 +474,13 @@ export default function UseFirestore() {
     return queryRef;
   };
 
+  const applyLimiting = (queryRef: FirebaseFirestoreTypes.Query, limitasi: number): FirebaseFirestoreTypes.Query => {
+    if (!!limitasi) {
+      queryRef = query(queryRef, limit(limitasi));
+    }
+    return queryRef;
+  };
+
   const applyPagination = (queryRef: FirebaseFirestoreTypes.Query, isStartPage: boolean, limitPerPage: number): FirebaseFirestoreTypes.Query => {
     if (!isStartPage && lastVisible) {
       queryRef = query(queryRef, startAfter(lastVisible));
@@ -487,6 +500,7 @@ export default function UseFirestore() {
     deleteDocument,
     deleteBatchDocument,
     addCollection,
+    getCollectionLimit,
     getCollectionWhereOrderBy,
     getCollection,
     getCollectionIds,
