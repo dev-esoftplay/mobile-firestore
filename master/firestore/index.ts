@@ -340,9 +340,10 @@ export default function UseFirestore() {
 
     let datas: any[] = []
     getDocs(queryRef).then((snap) => {
-      snap.docs.forEach((doc) => {
-        datas.push({ data: doc.data(), id: doc.id })
-      })
+      if (snap?.docs?.length > 0)
+        snap?.docs?.forEach?.((doc) => {
+          datas.push({ data: doc.data(), id: doc.id })
+        })
       callback(datas)
     }).catch(error)
   }
@@ -383,8 +384,8 @@ export default function UseFirestore() {
     const docRef = doc(db, fixedPath);
 
     const unsubscribe = onSnapshot(docRef, (docs) => {
-      if (docs.exists) {
-        callback({ data: docs.data(), id: docs.id });
+      if (docs?.exists?.()) {
+        callback({ data: docs?.data(), id: docs?.id });
       } else {
         callback(null);
       }
@@ -408,9 +409,9 @@ export default function UseFirestore() {
 
     const unsubscribe = onSnapshot(queryRef, (snaps) => {
       const datas: any[] = [];
-      if (!snaps?.empty) {
-        snaps.docs.forEach((doc) => {
-          datas.push({ data: doc.data(), id: doc.id });
+      if (!snaps?.empty && snaps?.docs?.length > 0) {
+        snaps?.docs?.forEach?.((doc) => {
+          datas.push({ data: doc?.data(), id: doc?.id });
         });
       }
       callback(datas);
@@ -444,13 +445,13 @@ export default function UseFirestore() {
 
     let allData: any[] = []
     getDocs(queryRef).then((snap) => {
-      snap.docs.forEach((r) => {
+      snap?.docs?.forEach?.((r) => {
         allData.push(r.id)
       })
-      if (snap.docs.length > 0) {
-        lastVisible = snap.docs[snap.docs.length - 1];
+      if (snap?.docs?.length > 0) {
+        lastVisible = snap?.docs?.[snap?.docs?.length - 1];
       }
-      callback(allData, snap.empty)
+      callback(allData, snap?.empty)
     }).catch(error)
   }
 
