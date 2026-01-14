@@ -3,7 +3,7 @@
 globalThis.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
 
 import { getApps, initializeApp, ReactNativeFirebase } from '@react-native-firebase/app';
-import { createUserWithEmailAndPassword, FirebaseAuthTypes, getAuth, signInWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
+import { createUserWithEmailAndPassword, FirebaseAuthTypes, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
 import { addDoc, collection, deleteDoc, doc, FirebaseFirestoreTypes, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from '@react-native-firebase/firestore';
 import esp from 'esoftplay/esp';
 import { MMKV } from 'react-native-mmkv';
@@ -54,11 +54,6 @@ export default function UseFirestore() {
 
   const defAppName = "[DEFAULT]"
 
-  const user = esp.mod("user/class").state().get()
-  const email = user?.email
-  const pass = esp.mod("lib/utils").shorten(user?.email + "" + user?.id)
-  const password = generatePassword(pass, email)
-
   const castPathToString = (path: any[]): string => {
     const strings = path?.map?.(x => String(x)) || []
     return strings.join("/")
@@ -80,30 +75,89 @@ export default function UseFirestore() {
     storage.delete(APPS_KEY)
   }
 
-  const init = async (config = defConfig, appName = defAppName) => {
-    try {
-      const existingApp = getApps().find(app => app.name === appName);
-      let app: ReactNativeFirebase.FirebaseApp
+  let initPromise: Promise<void> | null = null
+  const init = async (
+    config = defConfig,
+    appName = defAppName
+  ) => {
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      const existingApp = getApps().find(app => app.name === appName)
 
       if (!existingApp) {
-        app = initializeApp(config, appName);
-        // console.log('App initialized:', app);
+        initializeApp(config, appName)
+      }
+    })()
+
+    return initPromise
+  }
+
+  const listenAuth = (appName = defAppName) => {
+    const app = getApps().find(a => a.name === appName)
+    if (!app) return () => { }
+
+    const auth = getAuth(app)
+
+    return onAuthStateChanged(auth, user => {
+      if (user) {
+        setUserData(appName, user)
       } else {
-        // console.log('App already exists:', existingApp.name);
-        app = existingApp;
+        removeAllUserData()
       }
+    })
+  }
 
-      // Check if user data exists
-      if (esp.mod("user/class").state().get()?.email) {
-        await register(app, email, password, (credential) => {
-          setUserData(appName, credential.user);
-        });
+  let ensureAuthPromise: Promise<void> | null = null
+  async function ensureAuth() {
+    if (ensureAuthPromise) return ensureAuthPromise
+
+    ensureAuthPromise = (async () => {
+      try {
+        const firestore = esp.mod("firestore/index")?.()
+        const app = firestore?.instance?.()
+        if (!app) return
+
+        const auth = getAuth(app)
+
+        // Wait until Firebase finishes restoring auth state
+        await new Promise<void>(resolve => {
+          let resolved = false
+
+          const unsub = onAuthStateChanged(auth, () => {
+            if (!resolved) {
+              resolved = true
+              unsub()
+              // small delay to allow auth stabilization
+              setTimeout(resolve, 0)
+            }
+          })
+        })
+
+        // If Firebase already has a user, stop
+        if (auth.currentUser) return
+
+        const user = esp.mod("user/class").state().get()
+        const email = user?.email
+        if (!email) return
+
+        const pass = esp.mod("lib/utils").shorten(email + user?.id)
+        const password = generatePassword(pass, email)
+
+        await register(app, email, password, credential => {
+          setUserData(app.name, credential.user)
+        })
+
+      } catch (e) {
+        console.warn('[ensureAuth] failed:', e)
+      } finally {
+        // 🔥 allow retry if needed
+        ensureAuthPromise = null
       }
+    })()
 
-    } catch (error) {
-      console.error('Error initializing app:', error);
-    }
-  };
+    return ensureAuthPromise
+  }
 
   const instance = (appName = defAppName) => {
     const app = getApps().find(app => app.name === appName);
@@ -491,6 +545,8 @@ export default function UseFirestore() {
 
   return {
     init,
+    listenAuth,
+    ensureAuth,
     getUserData,
     logout,
     instance,
