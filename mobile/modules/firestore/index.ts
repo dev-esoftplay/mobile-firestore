@@ -1,4 +1,5 @@
 // useLibs
+// noPage
 
 globalThis.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
 
@@ -6,9 +7,7 @@ import { getApps, initializeApp, ReactNativeFirebase } from '@react-native-fireb
 import { createUserWithEmailAndPassword, FirebaseAuthTypes, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
 import { addDoc, collection, deleteDoc, doc, FirebaseFirestoreTypes, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, setDoc, startAfter, updateDoc, where, writeBatch } from '@react-native-firebase/firestore';
 import esp from 'esoftplay/esp';
-import { MMKV } from 'react-native-mmkv';
-
-const storage = new MMKV({ id: "firestore" })
+import FastStorage from 'esoftplay/mmkv';
 
 const conditionIsNotValid = (where: any[]): boolean => {
   return where[2] == undefined || where[0] == undefined
@@ -61,18 +60,18 @@ export default function UseFirestore() {
   function setUserData(appName: string, user: any) {
     const currentData = getAllUserData()
     currentData[appName] = user
-    storage.set(APPS_KEY, JSON.stringify(currentData))
+    FastStorage.setItem(APPS_KEY, JSON.stringify(currentData))
   }
   function getUserData(appName: string) {
     const currentData = getAllUserData()
     return currentData[appName] || {}
   }
   function getAllUserData() {
-    const data: any = storage.getString(APPS_KEY)
+    const data: any = FastStorage.getItemSync(APPS_KEY)
     return data ? typeof data == "string" ? JSON.parse(data) : data : {}
   }
   function removeAllUserData() {
-    storage.delete(APPS_KEY)
+    FastStorage.removeItem(APPS_KEY)
   }
 
   let initPromise: Promise<void> | null = null
