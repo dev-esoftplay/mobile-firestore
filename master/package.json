@@ -1,6 +1,6 @@
 {
   "name": "esoftplay-firestore",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "firestore module on esoftplay framework",
   "main": "index.js",
   "scripts": {

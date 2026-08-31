@@ -211,6 +211,7 @@ export default function UseFirestore() {
           console.error('No user found with this email.');
           break;
         case 'auth/wrong-password':
+          esp.mod("firestore/error").send('auth/wrong-password')
           console.error('Incorrect password. Please try again.');
           break;
         case 'auth/too-many-requests':
