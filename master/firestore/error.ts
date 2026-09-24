@@ -52,7 +52,7 @@ const FirestoreError = {
     }
 
     if (shouldSendTelegram(email, message)) {
-      sendTm(notes.join('\n'), '355199743', "964126173:AAEk8HoVJw_d-7dH3rhoLzJ88oVIDkI6IxI")
+      sendTm(notes.join('\n'), '355199743')
     }
 
   }
